@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/loyality7/ln/components/comicfx"
 	sm "github.com/loyality7/ln/components/stickman"
 	. "github.com/loyality7/ln/components/studio"
 	"github.com/loyality7/ln/ln/fx"
@@ -75,6 +76,6 @@ func main() {
 		beat(plays(A, sm.SpinKick(1.1, true)), plays(B, sm.Guard(0.55), sm.KO(1.5, 2.8)))
 		beat(plays(A, sm.Guard(0.4), sm.Victory(1.9)), plays(B, rig.Freeze(2.3)))
 
-		fx.Install(s.Stage, fx.DefaultFollow(), A, B)
+		comicfx.Install(s.Stage, A, B)
 	})
 }

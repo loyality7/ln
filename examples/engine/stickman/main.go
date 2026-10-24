@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/loyality7/ln/components/comicfx"
 	sm "github.com/loyality7/ln/components/stickman"
 	. "github.com/loyality7/ln/components/studio"
 	"github.com/loyality7/ln/ln/fx"
@@ -66,6 +67,6 @@ func main() {
 				fx.Caption(s.Stage, start, m.move.Dur, m.name)
 			}
 		}
-		fx.Install(s.Stage, fx.DefaultFollow(), hero)
+		comicfx.Install(s.Stage, hero)
 	})
 }

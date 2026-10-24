@@ -30,7 +30,8 @@
     <td align="center" width="50%"><img src="assets/spin.gif" width="400" height="225" alt="A cube drawn in by the pen, with a sphere orbiting it"><br><b>Spin</b><br><sub>The pen draws the scene in, a cube turns, a sphere orbits, the camera follows a spline.<br><code>examples/animation/spin</code></sub></td>
   </tr>
   <tr>
-    <td align="center" colspan="2"><img src="assets/blackhole.gif" width="280" alt="A camera tour of a black hole in white ink: zooming in, circling, the far side of the disk bent over the shadow"><br><b>Black hole</b><br><sub>Light bent by gravity (<code>ln/physics</code>), drawn as ink lines. Zooms in, rises above the disk, skims it, pulls back.<br><code>examples/space/blackhole</code></sub></td>
+    <td align="center"><img src="assets/blackhole.gif" width="260" alt="A camera tour of a black hole in white ink: zooming in, circling, the far side of the disk bent over the shadow"><br><b>Black hole, ink lines</b><br><sub>Light bent by gravity (<code>ln/physics</code>), drawn as lines. Zooms in, rises above the disk, skims it, pulls back.<br><code>examples/space/blackhole</code></sub></td>
+    <td align="center"><img src="assets/blackhole_glow.gif" width="260" alt="The same camera tour of the black hole drawn as smooth glowing light: gold bands around the shadow, a thin photon ring, starlight streaking as the camera dives in"><br><b>Black hole, glowing light</b><br><sub>The same bent rays, drawn as light with bloom (<code>ln/glow</code>): heat from the disk's radius, a thin photon ring, starlight pulled into streaks.<br><code>examples/space/blackhole -glow</code></sub></td>
   </tr>
 </table>
 

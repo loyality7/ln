@@ -45,19 +45,21 @@ func Emit(p Params) *glow.Canvas {
 			r := math.Hypot(s.P.X, s.P.Y)
 			// the heat of the gas depends on its radius alone, so every side of every ring glows
 			kelvin := physics.PowerLaw(r, p.DiskIn, heat, 0.75)
-			// Doppler only tints and gently brightens: bluer and a little brighter coming toward us
+			// Doppler gently brightens the side coming toward us and dims the side moving away
 			dop := physics.Doppler(geom.V(-s.P.Y, s.P.X, 0).Normalize().MulScalar(grav.CircularSpeed(r)), s.Heading.MulScalar(-1))
-			dop = math.Max(0.75, math.Min(1.3, dop))
-			red, green, blue := physics.Blackbody(kelvin * 0.55 * dop)
-			// the rings of the line version, as bands of light: one every few percent of radius
-			ring := 0.5 + 0.5*math.Cos(2*math.Pi*math.Log(r/p.DiskIn)/math.Log(p.Rings*1.9))
-			// swirling bands in the gas: inner gas laps the outer, so the pattern shears as time passes
+			dop = math.Max(0.7, math.Min(1.45, dop))
+			// wide smooth bands of light around the hole, a few per octave of radius
+			ring := 0.5 + 0.5*math.Cos(2*math.Pi*math.Log(r/p.DiskIn)*2.1)
+			ring = math.Pow(ring, 1.4)
+			// the gas shears: inner gas laps the outer, so the bands wander as time passes
 			psi := math.Atan2(s.P.Y, s.P.X) + p.Time*p.Spin*grav.AngularVelocity(r)
-			swirl := 0.7 + 0.2*math.Sin(11*psi+7*math.Log(r)) + 0.1*math.Sin(23*psi-13*math.Log(r))
-			power := math.Pow(kelvin/heat, 2.6) * (0.35 + 0.65*ring) * swirl * math.Pow(dop, 1.2) * 1.5
+			swirl := 0.8 + 0.14*math.Sin(5*psi+9*math.Log(r)) + 0.06*math.Sin(13*psi-17*math.Log(r))
+			v := math.Pow(kelvin/heat, 1.9) * (0.28 + 0.72*ring) * swirl * math.Pow(dop, 1.5)
 			if n == 1 {
-				power *= 0.85 // the bent image is a little dimmer
+				v *= 0.9 // the bent image is a little dimmer
 			}
+			red, green, blue := ramp(v)
+			power := 0.15 + 2.1*math.Pow(math.Min(v, 1.4), 1.6)
 			c.Add(x, y, red*power, green*power, blue*power)
 		}
 		if exit := g.Exit[k]; exit != (vec{}) {
@@ -65,6 +67,13 @@ func Emit(p Params) *glow.Canvas {
 				c.Add(x, y, 1.3*b, 1.3*b, 1.5*b)
 			}
 		}
+	}
+	// the photon ring: a thin bright orange circle where light nearly orbits the hole
+	th2 := math.Tan(p.FOV / 2)
+	ringR := math.Tan(criticalImpact(grav)/p.Distance) / th2 * float64(p.H) / 2
+	for i := 0; i < 720; i++ {
+		a := 2 * math.Pi * float64(i) / 720
+		c.Spot(float64(p.W)/2+ringR*math.Cos(a), float64(p.H)/2+ringR*math.Sin(a), 0.9, 0.9, 0.5, 0.12)
 	}
 	if p.Streak > 0 { // starlight pulled into lines as the camera dives in
 		for i := 0; i < 260; i++ {
@@ -77,4 +86,18 @@ func Emit(p Params) *glow.Canvas {
 		}
 	}
 	return c
+}
+
+// ramp is the colour of glowing gas of brightness v: dark brown, then orange, gold, and cream-white at the
+// brightest, like heated metal.
+func ramp(v float64) (r, g, b float64) {
+	stops := [...][4]float64{{0, 0.03, 0.01, 0.0}, {0.18, 0.4, 0.1, 0.01}, {0.4, 0.85, 0.3, 0.04}, {0.65, 1, 0.62, 0.16}, {0.9, 1, 0.86, 0.5}, {1.3, 1, 0.97, 0.88}}
+	v = math.Max(0, math.Min(1.3, v))
+	for i := 1; i < len(stops); i++ {
+		if v <= stops[i][0] {
+			t := (v - stops[i-1][0]) / (stops[i][0] - stops[i-1][0])
+			return stops[i-1][1] + t*(stops[i][1]-stops[i-1][1]), stops[i-1][2] + t*(stops[i][2]-stops[i-1][2]), stops[i-1][3] + t*(stops[i][3]-stops[i-1][3])
+		}
+	}
+	return 1, 0.97, 0.88
 }

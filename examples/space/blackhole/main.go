@@ -67,6 +67,9 @@ func main() {
 	format := flag.String("fmt", "mp4", "mp4 | gif | webm")
 	still := flag.Float64("still", -1, "write one picture at this time in seconds instead of a video")
 	out := flag.String("out", "out/space/blackhole", "output path without extension")
+	roll := flag.Float64("roll", 0, "tilt the camera, radians (the disk then crosses the shadow at an angle)")
+	dist := flag.Float64("dist", 0, "with -still: camera distance, overriding the tour")
+	incl := flag.Float64("incline", -1, "with -still: height above the disk plane in radians, overriding the tour")
 	smooth := flag.Bool("glow", false, "smooth glowing light with bloom, like a photograph, instead of lines")
 	colour := flag.Bool("colour", false, "glowing colour: hot gold inside, red outside, bluer on the side moving toward us")
 	flag.Parse()
@@ -77,6 +80,13 @@ func main() {
 		p.Distance, p.Incline, p.Azimuth = camera(t)
 		p.Time = t
 		p.Colour = *colour
+		p.Roll = *roll
+		if *dist > 0 {
+			p.Distance = *dist
+		}
+		if *incl >= 0 {
+			p.Incline = *incl
+		}
 		if *smooth { // the camera dives in during the tour, and starlight streaks with it
 			p.Streak = 1.2 * math.Max(0, math.Min(1, (t-5)/2)) * math.Max(0, math.Min(1, (11-t)/2))
 		}

@@ -119,11 +119,50 @@ def merge_close(centres, limit):
     return np.array(cs, np.float32)
 
 
+def tiny(frame):
+    return cv2.resize(frame, (32, 32), interpolation=cv2.INTER_AREA).astype(np.float32)
+
+
+def is_cut(a, b):
+    """A cut between two frames (their 32x32 thumbnails): the picture changed completely, not just moved."""
+    diff = float(np.abs(a - b).mean())
+    ha = cv2.calcHist([a.astype(np.uint8)], [0, 1, 2], None, [6, 6, 6], [0, 256] * 3)
+    hb = cv2.calcHist([b.astype(np.uint8)], [0, 1, 2], None, [6, 6, 6], [0, 256] * 3)
+    cv2.normalize(ha, ha, 1, 0, cv2.NORM_L1)
+    cv2.normalize(hb, hb, 1, 0, cv2.NORM_L1)
+    return diff > 30 or cv2.compareHist(ha, hb, cv2.HISTCMP_BHATTACHARYYA) > 0.55
+
+
+def palette_from(frames, colours, merge):
+    """k-means over the pixels of a few frames: the palette of one shot."""
+    pix, skin = [], []
+    for frame in frames:
+        flat = flatten(frame, 8, 20)
+        lab = to_lab(flat).reshape(-1, 3)
+        pix.append(lab[:: max(1, len(lab) // 5000)])
+        s = skin_mask(flat).reshape(-1) > 0
+        if s.any():
+            skin.append(lab[s][:: max(1, int(s.sum()) // 1500)])
+    data = np.vstack(pix).astype(np.float32)
+    k = max(2, min(colours, len(data) // 400))
+    crit = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.5)
+    _, _, centres = cv2.kmeans(data, k, None, crit, 3, cv2.KMEANS_PP_CENTERS)
+    centres = merge_close(centres, merge)
+    skin_lab = None
+    if skin and sum(len(x) for x in skin) > 600:
+        skin_lab = np.vstack(skin).mean(axis=0).astype(np.float32)
+    return centres, skin_lab
+
+
 def make_palette(path, width, fps, colours, merge, every=12):
     """k-means over pixels from frames spread through the video (one in every `every`)."""
-    pix, skin, n = [], [], 0
+    pix, skin, n, cuts, last = [], [], 0, 0, None
     for i, frame in enumerate(read_frames(path, width, fps)):
         n = i + 1
+        small = tiny(frame)
+        if last is not None and is_cut(last, small):
+            cuts += 1
+        last = small
         if i % every:
             continue
         flat = flatten(frame, 8, 20)
@@ -141,7 +180,7 @@ def make_palette(path, width, fps, colours, merge, every=12):
     skin_lab = None
     if skin and sum(len(x) for x in skin) > 800:  # enough skin to be worth its own colour
         skin_lab = np.vstack(skin).mean(axis=0).astype(np.float32)
-    return centres, skin_lab, n
+    return centres, skin_lab, n, cuts
 
 
 def to_rgb(lab_centre):
@@ -254,15 +293,19 @@ def components(label, k_count):
     return ids, np.array(lab_of), np.array(area_of, np.float64)
 
 
-def merge_weak(label, centres, gray, k_count, border, limit):
+def merge_weak(label, centres, gray, k_count, border, limit, lab_img):
     """Join neighbouring patches whose shared border has no real edge on it: one surface, cut in two
     by a palette step across a smooth gradient. Colours must also be close, so a chain of merges
-    cannot slide from one thing into another."""
+    cannot slide from one thing into another: a group keeps the range of colours it holds, and no channel of
+    that range may grow wider than `limit`, so a chain of small steps cannot carry one colour all the way to
+    another."""
     ids, lab_of, area = components(label, k_count)
     g = cv2.GaussianBlur(gray.astype(np.float32), (0, 0), 1.2)
     gx, gy = cv2.Sobel(g, cv2.CV_32F, 1, 0), cv2.Sobel(g, cv2.CV_32F, 0, 1)
     mag = np.hypot(gx, gy) / 8.0  # roughly: brightness steps across one pixel
     n = len(lab_of)
+    grp_mean = np.stack([np.bincount(ids.ravel(), weights=lab_img[..., c].ravel(), minlength=n) for c in range(3)], axis=1) / np.maximum(area, 1)[:, None]
+    grp_lo, grp_hi = grp_mean.copy(), grp_mean.copy()  # each group's colour range, so it can never drift
     pairs = {}
     for a, b, m in ((ids[:, :-1], ids[:, 1:], np.maximum(mag[:, :-1], mag[:, 1:])), (ids[:-1, :], ids[1:, :], np.maximum(mag[:-1, :], mag[1:, :]))):
         diff = a != b
@@ -290,15 +333,17 @@ def merge_weak(label, centres, gray, k_count, border, limit):
             break
         if a == 0 or b == 0:
             continue
-        if np.linalg.norm(centres[lab_of[a]] - centres[lab_of[b]]) > limit:
-            continue
         ra, rb = find(a), find(b)
         if ra == rb:
             continue
+        new_lo, new_hi = np.minimum(grp_lo[ra], grp_lo[rb]), np.maximum(grp_hi[ra], grp_hi[rb])
+        if float((new_hi - new_lo).max()) > limit:
+            continue  # joining would put clearly different colours in one patch
         if area[ra] < area[rb]:
             ra, rb = rb, ra
         parent[rb] = ra
         area[ra] += area[rb]
+        grp_lo[ra], grp_hi[ra] = new_lo, new_hi
     root = np.array([find(i) for i in range(n)])
     return lab_of[root][ids].astype(label.dtype)
 
@@ -562,17 +607,25 @@ def main():
     ap.add_argument("--tones", type=int, default=4, help="brightness contours to draw")
     ap.add_argument("--blur", type=float, default=2.0, help="blur radius before tracing brightness (more: bigger simpler shapes)")
     ap.add_argument("--edge-cut", type=float, default=0.65, help="how strong an edge must be to be drawn, 0..1 (lower draws more)")
+    ap.add_argument("--merge-colour", type=float, default=34, help="a merged patch may hold colours no further apart than this in any channel (higher: bigger flatter patches)")
+    ap.add_argument("--detail-area", type=float, default=70, help="smallest detail patch in pixels")
+    ap.add_argument("--detail-min", type=float, default=30, help="a detail patch must differ this much (RGB distance) from the patch under it")
+    ap.add_argument("--detail-max", type=int, default=160, help="most detail patches per frame (0 = none)")
     ap.add_argument("--min-grad", type=float, default=0.02, help="a brightness contour is drawn only where the light changes at least this much per pixel along it")
     ap.add_argument("--min-len", type=float, default=36, help="drop lines shorter than this many pixels")
     ap.add_argument("--min-size", type=float, default=10, help="drop shapes smaller than this many pixels across")
     ap.add_argument("--limit", type=int, default=0, help="stop after this many frames")
     a = ap.parse_args()
 
-    centres, skin_lab, total = make_palette(a.video, a.width, a.fps, a.colours, a.merge)
-    if skin_lab is not None:  # skin is the last palette entry, claimed by the colour rule not by nearness
-        centres = np.vstack([centres, skin_lab[None, :]])
-    skin_k = len(centres) - 1 if skin_lab is not None else -1
-    rgb = [to_rgb(c) for c in centres]
+    centres, skin_lab, total, n_cuts = make_palette(a.video, a.width, a.fps, a.colours, a.merge)
+    shot_mode = n_cuts >= 2  # a montage: every shot gets its own palette and starts with no memory
+    if n_cuts:
+        print(f"{n_cuts} cuts found", file=sys.stderr)
+
+    def with_skin(c, s):  # skin is the last palette entry, claimed by the colour rule not by nearness
+        return (np.vstack([c, s[None, :]]) if s is not None else c), (len(c) if s is not None else -1)
+
+    centres, skin_k = with_skin(centres, skin_lab)
     K = len(centres)
     sink = sys.stdout if a.out == "-" else open(a.out, "w")
     levels = [(k + 1) / (a.tones + 1) for k in range(a.tones)]
@@ -580,10 +633,41 @@ def main():
     prob = tone = edge = imp = prev_gray = prev_ids = prev_clean = prev_raw = prev_label = None
     next_id = 0
     paint = {}  # the colour each tracked patch is painted
-    for i, frame in enumerate(read_frames(a.video, a.width, a.fps)):
+    src = read_frames(a.video, a.width, a.fps)
+    ahead = []
+    last_small = None
+    i = -1
+    while True:
+        while len(ahead) < 8:  # look a few frames ahead, to see where this shot ends
+            try:
+                ahead.append(next(src))
+            except StopIteration:
+                break
+        if not ahead:
+            break
+        frame = ahead.pop(0)
+        i += 1
         if a.limit and i >= a.limit:
             break
         h, w = frame.shape[:2]
+        small = tiny(frame)
+        if last_small is None or (shot_mode and is_cut(last_small, small)):
+            if last_small is not None:  # a cut: forget everything about the last shot
+                prob = tone = edge = imp = prev_gray = prev_ids = prev_clean = prev_raw = prev_label = None
+                paint = {}
+            if shot_mode:
+                shot = [frame]
+                prev_t = small
+                for nxt in ahead:
+                    t = tiny(nxt)
+                    if is_cut(prev_t, t):
+                        break
+                    shot.append(nxt)
+                    prev_t = t
+                c, s = palette_from(shot, a.colours, a.merge)
+                centres, skin_k = with_skin(c, s)
+                K = len(centres)
+        last_small = small
         raw_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         flow = steady(flow_between(raw_gray, prev_raw)) if prev_raw is not None else None
         imp = importance(flow, imp) if flow is not None else np.zeros((h, w), np.float32)
@@ -601,14 +685,16 @@ def main():
 
         # --- labels, voted on by last frame's moved along the flow
         flat = flatten(frame, 8, a.flat)
-        lbl = label_frame(to_lab(flat), centres[:skin_k] if skin_k >= 0 else centres)
+        lab_img = to_lab(flat)
+        lbl = label_frame(lab_img, centres[:skin_k] if skin_k >= 0 else centres)
         if skin_k >= 0:
             lbl[skin_mask(flat) > 0] = skin_k
         now = np.zeros((h, w, K), np.float32)
         np.put_along_axis(now, lbl[..., None], 1.0, axis=2)
         prob = now if prob is None else keep[..., None] * warp(prob, flow) + (1 - keep[..., None]) * now
         label = cv2.medianBlur(hold(prob, prev_label, flow, a.hold, imp), 5)
-        label = merge_weak(label, centres, gray, K, a.border, 60.0)
+        fine = label.copy()  # the same picture before merging: source of the small detail patches
+        label = merge_weak(label, centres, gray, K, a.border, a.merge_colour, lab_img)
         label = absorb_small(label, K, a.min_area, imp, skin_k, centres, a.stand_out)
         prev_label = label.copy()  # the settled picture, merges and all, is what the next frame holds on to
 
@@ -699,6 +785,26 @@ def main():
         for r in regions:
             del r["_c"], r["_sat"]
 
+        # --- detail: small patches that differ clearly from the big patch under them go on top, so a sun
+        # does not melt into its sky; busy texture (leaves, sparks) and anything faint is left out
+        if a.detail_max > 0:
+            fine = absorb_small(fine, K, a.detail_area, imp, skin_k, centres, a.stand_out)
+            n_comp = int(ids.max()) + 1
+            counts = np.maximum(np.bincount(ids.ravel(), minlength=n_comp), 1)
+            base_rgb = np.stack([np.bincount(ids.ravel(), weights=frame[..., 2 - ch].ravel(), minlength=n_comp) / counts for ch in range(3)], axis=1)
+            base_img = base_rgb[ids]
+            zeros = np.zeros((h, w), np.int32)
+            extra = []
+            for k in range(K):
+                for area, loops, contrast, now_rgb, _ in shapes(fine, k, centres, a.detail_area, a.smooth, frame, zeros):
+                    px, py = min(max(int(loops[0][0][0]), 0), w - 1), min(max(int(loops[0][0][1]), 0), h - 1)
+                    if float(np.linalg.norm(np.array(now_rgb) - base_img[py, px])) < a.detail_min:
+                        continue
+                    if tex[py, px] > 0.6 and imp[py, px] < 0.3 and contrast < a.stand_out:
+                        continue
+                    extra.append({"c": [int(round(v)) for v in now_rgb], "area": area, "x": round(contrast, 1), "id": 0, "loops": loops})
+            extra.sort(key=lambda r: -r["area"])
+            regions += extra[: a.detail_max]
         sink.write(json.dumps({"i": i, "w": w, "h": h, "regions": regions, "lines": lines}, separators=(",", ":")) + "\n")
         sink.flush()
         prev_gray = gray

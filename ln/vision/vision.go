@@ -10,6 +10,9 @@
 //
 //	pip install opencv-python numpy scikit-image
 //
+// Montages work too: ln/vision finds the cuts, gives every shot its own palette, and forgets the last shot
+// at each cut, so nothing smears across them.
+//
 // check.py, next to it, measures a finished drawing against its footage frame by frame:
 // flicker, lost structure, and subjects that fade or blink out.
 package vision
@@ -53,6 +56,10 @@ type Options struct {
 	Tones       int     // brightness contours to draw (8)
 	Blur        float64 // blur radius before tracing brightness: higher gives bigger, simpler shapes (2)
 	EdgeCut     float64 // how strong an edge must be to be drawn, 0..1: lower draws more (0.65)
+	MergeColour float64 // a merged patch may hold colours no further apart than this (34)
+	DetailArea  float64 // smallest detail patch in pixels (70)
+	DetailMin   float64 // a detail patch must differ this much (RGB distance) from the patch under it (30)
+	DetailMax   int     // most detail patches per frame (160); -1 for none
 	MinGrad     float64 // a shade line is drawn only where the light changes at least this much per pixel along it (0.02)
 	SilContrast float64 // two patches must differ this much (0..~100) to get a silhouette line between them (24)
 	StandOut    float64 // a patch that differs this much from its surroundings is always outlined (45)
@@ -199,6 +206,12 @@ func Read(video string, o Options, each func(Frame) error) error {
 	add("--tones", float64(o.Tones), o.Tones > 0)
 	add("--blur", o.Blur, o.Blur > 0)
 	add("--edge-cut", o.EdgeCut, o.EdgeCut > 0)
+	add("--merge-colour", o.MergeColour, o.MergeColour > 0)
+	add("--detail-area", o.DetailArea, o.DetailArea > 0)
+	add("--detail-min", o.DetailMin, o.DetailMin > 0)
+	if o.DetailMax != 0 {
+		args = append(args, "--detail-max", strconv.Itoa(max(o.DetailMax, 0)))
+	}
 	add("--min-grad", o.MinGrad, o.MinGrad > 0)
 	add("--sil-contrast", o.SilContrast, o.SilContrast > 0)
 	add("--stand-out", o.StandOut, o.StandOut > 0)

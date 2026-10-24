@@ -37,7 +37,8 @@ type Params struct {
 	Spokes   int     // spokes drawn around the disk
 	Stars    float64 // 0..1, how many stars
 	Colour   bool    // glowing colour (heat of the gas, Doppler shift, tinted stars) instead of white ink
-	Heat     float64 // temperature of the innermost gas in kelvin when Colour is on (0 = 9000)
+	Heat     float64 // temperature of the innermost gas in kelvin: Colour uses 9000 if 0, Emit uses 5600
+	Streak   float64 // Emit: how strongly starlight is pulled into radial lines as the camera dives in (0 = none)
 }
 
 // Default is a level, near edge-on view.

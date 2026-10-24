@@ -18,6 +18,7 @@ import (
 	"github.com/loyality7/ln/components/blackhole"
 	"github.com/loyality7/ln/ln/anim"
 	"github.com/loyality7/ln/ln/geom"
+	"github.com/loyality7/ln/ln/glow"
 )
 
 // shot is where the camera is at one moment of the tour.
@@ -66,6 +67,7 @@ func main() {
 	format := flag.String("fmt", "mp4", "mp4 | gif | webm")
 	still := flag.Float64("still", -1, "write one picture at this time in seconds instead of a video")
 	out := flag.String("out", "out/space/blackhole", "output path without extension")
+	smooth := flag.Bool("glow", false, "smooth glowing light with bloom, like a photograph, instead of lines")
 	colour := flag.Bool("colour", false, "glowing colour: hot gold inside, red outside, bluer on the side moving toward us")
 	flag.Parse()
 
@@ -75,12 +77,20 @@ func main() {
 		p.Distance, p.Incline, p.Azimuth = camera(t)
 		p.Time = t
 		p.Colour = *colour
+		if *smooth { // the camera dives in during the tour, and starlight streaks with it
+			p.Streak = 1.2 * math.Max(0, math.Min(1, (t-5)/2)) * math.Max(0, math.Min(1, (11-t)/2))
+		}
 		return &p
+	}
+	picture := func(p blackhole.Params) anim.Frame {
+		if *smooth {
+			return glow.Frame{Canvas: blackhole.Emit(p), Look: glow.Soft()}
+		}
+		return blackhole.Draw(p)
 	}
 	os.MkdirAll("out/space", 0o755)
 	if *still >= 0 {
-		dr := blackhole.Draw(*frame(*still))
-		if err := gg.SavePNG(*out+".png", dr.Image(float64(*w), float64(*h))); err != nil {
+		if err := gg.SavePNG(*out+".png", picture(*frame(*still)).Image(float64(*w), float64(*h))); err != nil {
 			panic(err)
 		}
 		fmt.Println("wrote", *out+".png")
@@ -88,7 +98,7 @@ func main() {
 	}
 	frames := int(duration * *fps)
 	film := anim.FrameAnimation(func(u float64) anim.Frame {
-		return blackhole.Draw(*frame(u * float64(frames) / *fps))
+		return picture(*frame(u * float64(frames) / *fps))
 	})
 	path := *out + "." + *format
 	fmt.Println("rendering", frames, "frames to", path)

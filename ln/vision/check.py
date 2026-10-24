@@ -44,6 +44,20 @@ def frames(path, width, fps):
         i += 1
 
 
+def thumb(img):
+    return cv2.resize(img, (32, 32), interpolation=cv2.INTER_AREA).astype(np.float32)
+
+
+def is_cut(a, b):
+    """The same test the converter uses: the footage changed completely between two frames."""
+    diff = float(np.abs(a - b).mean())
+    ha = cv2.calcHist([a.astype(np.uint8)], [0, 1, 2], None, [6, 6, 6], [0, 256] * 3)
+    hb = cv2.calcHist([b.astype(np.uint8)], [0, 1, 2], None, [6, 6, 6], [0, 256] * 3)
+    cv2.normalize(ha, ha, 1, 0, cv2.NORM_L1)
+    cv2.normalize(hb, hb, 1, 0, cv2.NORM_L1)
+    return diff > 40 or (diff > 18 and cv2.compareHist(ha, hb, cv2.HISTCMP_BHATTACHARYYA) > 0.5)
+
+
 def warp_back(img, flow):
     """Pull `img` (the previous frame) onto the current frame along flow (current -> previous)."""
     h, w = flow.shape[:2]
@@ -79,6 +93,7 @@ def main():
     src_all = src_all[:n]
 
     rows = []
+    cut_at = [t > 0 and is_cut(thumb(src_all[t - 1]), thumb(src_all[t])) for t in range(n)]
     prev_gray = prev_out = None
     ratio_hist = {}  # subject track id -> list of (frame, relative detail)
     tracks = []  # (centroid, id) from the previous frame
@@ -99,6 +114,10 @@ def main():
         n_es = int((es > 0).sum())
         row["structure_recall"] = round(float((dist[es > 0] <= 3).mean()) if n_es else 1.0, 3)
         subjects = []
+        if cut_at[t]:  # a cut: nothing carries over, so there is nothing to compare with the last frame
+            prev_gray = prev_out = None
+            tracks = []
+            row["cut"] = True
         if prev_gray is not None:
             small = (W // 2, H // 2)
             flow = cv2.calcOpticalFlowFarneback(cv2.resize(gs, small), cv2.resize(prev_gray, small), None, 0.5, 3, 15, 3, 5, 1.2, 0)
@@ -154,19 +173,22 @@ def main():
         if float(np.median(vals)) < 0.45:
             thin.append({"subject": tid, "frames": [hist[0][0], hist[-1][0]], "median_detail": round(float(np.median(vals)), 2)})
 
+    smooth_rows = [r for r in rows if r["frame"] > 0 and not r.get("cut")]  # flicker only means something between frames of one shot
+    fl_s = np.array([r["flicker"] for r in smooth_rows]) if smooth_rows else np.zeros(1)
     fl = np.array([r["flicker"] for r in rows])
     fid = np.array([r["fidelity_psnr"] for r in rows])
     rec = np.array([r["structure_recall"] for r in rows])
-    flick_cut = float(np.median(fl[1:]) * 1.6) if n > 2 else 0
-    flagged = [r["frame"] for r in rows if r["frame"] and (r["flicker"] > flick_cut or r["structure_recall"] < 0.55)]
+    flick_cut = float(np.median(fl_s) * 1.6)
+    flagged = [r["frame"] for r in rows if r["frame"] and not r.get("cut") and (r["flicker"] > flick_cut or r["structure_recall"] < 0.55)]
     still_v = [r["flicker_still"] for r in rows[1:] if r.get("flicker_still") is not None]
     move_v = [r["flicker_moving"] for r in rows[1:] if r.get("flicker_moving") is not None]
     summary = {
         "frames": n,
+        "cuts": int(sum(cut_at)),
         "flicker_still_mean": round(float(np.mean(still_v)), 3) if still_v else None,
         "flicker_moving_mean": round(float(np.mean(move_v)), 3) if move_v else None,
-        "flicker_mean": round(float(fl[1:].mean()), 3) if n > 1 else 0,
-        "flicker_p95": round(float(np.percentile(fl[1:], 95)), 3) if n > 1 else 0,
+        "flicker_mean": round(float(fl_s.mean()), 3),
+        "flicker_p95": round(float(np.percentile(fl_s, 95)), 3),
         "fidelity_psnr_mean": round(float(fid.mean()), 2),
         "structure_recall_mean": round(float(rec.mean()), 3),
         "structure_recall_min": round(float(rec.min()), 3),

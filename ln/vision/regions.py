@@ -119,6 +119,16 @@ def merge_close(centres, limit):
     return np.array(cs, np.float32)
 
 
+def lift(frame, target=72.0):
+    """Brighten a dark picture (gamma only, never darkens) so shapes in shadow still separate into patches."""
+    m = float(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY).mean())
+    if m >= target:
+        return frame
+    g = max(0.6, np.log(target / 255.0) / np.log(max(m, 4.0) / 255.0))
+    table = (255.0 * (np.arange(256) / 255.0) ** g).astype(np.uint8)
+    return cv2.LUT(frame, table)
+
+
 def tiny(frame):
     return cv2.resize(frame, (32, 32), interpolation=cv2.INTER_AREA).astype(np.float32)
 
@@ -130,13 +140,16 @@ def is_cut(a, b):
     hb = cv2.calcHist([b.astype(np.uint8)], [0, 1, 2], None, [6, 6, 6], [0, 256] * 3)
     cv2.normalize(ha, ha, 1, 0, cv2.NORM_L1)
     cv2.normalize(hb, hb, 1, 0, cv2.NORM_L1)
-    return diff > 30 or cv2.compareHist(ha, hb, cv2.HISTCMP_BHATTACHARYYA) > 0.55
+    # a dissolve or fast camera move changes the picture a lot but steadily; a cut changes it at once and
+    # also changes what colours it is made of
+    return diff > 40 or (diff > 18 and cv2.compareHist(ha, hb, cv2.HISTCMP_BHATTACHARYYA) > 0.5)
 
 
 def palette_from(frames, colours, merge):
     """k-means over the pixels of a few frames: the palette of one shot."""
     pix, skin = [], []
     for frame in frames:
+        frame = lift(frame)
         flat = flatten(frame, 8, 20)
         lab = to_lab(flat).reshape(-1, 3)
         pix.append(lab[:: max(1, len(lab) // 5000)])
@@ -165,6 +178,7 @@ def make_palette(path, width, fps, colours, merge, every=12):
         last = small
         if i % every:
             continue
+        frame = lift(frame)
         flat = flatten(frame, 8, 20)
         lab = to_lab(flat).reshape(-1, 3)
         pix.append(lab[:: max(1, len(lab) // 6000)])
@@ -679,7 +693,7 @@ def main():
         keep = memory(a.calm, imp)
         clean = denoise(frame, prev_clean, flow)  # from here on, the footage with its noise taken out
         prev_clean, prev_raw = clean, raw_gray
-        frame = np.clip(clean, 0, 255).astype(np.uint8)
+        frame = lift(np.clip(clean, 0, 255).astype(np.uint8))  # and brightened if it is very dark
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         tex = texture(gray)
 

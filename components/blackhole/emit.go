@@ -37,7 +37,7 @@ func Emit(p Params) *glow.Canvas {
 	c := glow.New(p.W, p.H)
 	heat := p.Heat
 	if heat == 0 {
-		heat = 5600 // amber in the middle, deep red outside: hot enough to glow gold without washing out to white
+		heat = 5000 // deep amber in the middle, deep red outside: hot enough to glow gold without washing out to white
 	}
 	for k := range g.OK {
 		x, y := k%p.W, p.H-1-k/p.W // buffers run bottom-up, canvases top-down
@@ -46,11 +46,11 @@ func Emit(p Params) *glow.Canvas {
 			vel := geom.V(-s.P.Y, s.P.X, 0).Normalize().MulScalar(grav.CircularSpeed(r))
 			shift := physics.Doppler(vel, s.Heading.MulScalar(-1)) * grav.TimeDilation(r)
 			kelvin := physics.PowerLaw(r, p.DiskIn, heat, 0.75) * shift
-			red, green, blue := physics.Blackbody(kelvin * 0.62) // the light is read cooler than the gas is hot, so it glows orange, not white
+			red, green, blue := physics.Blackbody(kelvin * 0.55) // the light is read cooler than the gas is hot, so it glows orange, not white
 			// swirling bands in the gas: inner gas laps the outer, so the pattern shears as time passes
 			psi := math.Atan2(s.P.Y, s.P.X) + p.Time*p.Spin*grav.AngularVelocity(r)
 			swirl := 0.62 + 0.26*math.Sin(11*psi+7*math.Log(r)) + 0.12*math.Sin(23*psi-13*math.Log(r))
-			power := math.Pow(kelvin/heat, 5.5) * swirl * 3.4
+			power := math.Pow(kelvin/heat, 6.5) * swirl * 2.2
 			if n == 1 {
 				power *= 0.8 // the bent image is a little dimmer
 			}

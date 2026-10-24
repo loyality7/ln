@@ -101,6 +101,27 @@ fx.Install(s.Stage, fx.DefaultFollow(), a, b)             // dust, stars, shake,
 
 The stick man above and the two-man fight in the grid are scripts of this kind: blocks, dodges, an uppercut, a flying kick, a spin kick, a double flip, a clash and a knockout, about 60 lines of choreography.
 
+## Video to art
+
+Give ln any video and it redraws it. It finds the cuts, gives every shot its own colour palette, keeps shapes steady from frame to frame by carrying them along the footage's motion, and writes the result as ink lines and flat colour patches. No trained model is involved. The same footage, drawn two ways:
+
+<table align="center">
+  <tr>
+    <td align="center" width="50%"><img src="assets/video_colour.gif" width="320" alt="A fast montage of shots redrawn as flat colour patches under thin ink lines"><br><b>Colour</b><br><sub><code>-nofill=false</code></sub></td>
+    <td align="center" width="50%"><img src="assets/video_lines.gif" width="320" alt="The same montage redrawn as thin black lines on white"><br><b>Lines only</b><br><sub>the default</sub></td>
+  </tr>
+</table>
+
+```
+go run ./examples/video/art -in clip.mp4 -out out/art.mp4                    # black lines on white
+go run ./examples/video/art -in clip.mp4 -out out/art.mp4 -nofill=false      # colour patches under the lines
+go run ./examples/video/art -in clip.mp4 -out out/art.png -frame 30          # one frame, to tune with
+go run ./examples/video/art -in clip.mp4 -out out/art.mp4 -gocode out/art.go # also the animation as plain Go code
+go run ./examples/video/art -in clip.mp4 -out out/art.mp4 -check             # measure flicker and lost detail per frame
+```
+
+It needs Python with `pip install opencv-python numpy scikit-image`, and ffmpeg. The original footage is not included here, because it is not ours to publish; use your own clip.
+
 ## How it works
 
 ```
@@ -123,6 +144,7 @@ Every arrow is an interface. A new look, a new light or a new kind of shape plug
 | `ln/ink` `ln/ascii` | The looks: hatched ink, manga, ASCII |
 | `ln/stage` `ln/anim` | Scene graph, timeline in seconds, easing, video and GIF export |
 | `ln/rig` `ln/fx` | Characters and motion as data; comic effects and the follow camera |
+| `ln/vision` | Reads shapes out of any video: cuts, palettes per shot, steady patches and lines, and a frame-by-frame checker (needs Python with OpenCV) |
 | `ln/physics` | General laws: RK4 integrators, gravity and orbits, light bending, Doppler and beaming, thermal radiation |
 | `components/` | Things built on the core: `studio` (the simple front door: one import, no boilerplate), `env` (sky, sun, moon), `nature` (terrain, pines, rocks), `stickman`, `mannequin`, `world`, `blackhole` |
 

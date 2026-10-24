@@ -40,7 +40,7 @@ func writeVideo(path string, n int, fps, width, height float64, frame func(t flo
 	case ".webm":
 		args = append(args, "-c:v", "libvpx-vp9", "-pix_fmt", "yuv420p")
 	default: // h264 needs even dimensions
-		args = append(args, "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2", "-c:v", "libx264", "-pix_fmt", "yuv420p")
+		args = append(args, "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2", "-c:v", "libx264", "-crf", "14", "-pix_fmt", "yuv420p")
 	}
 	cmd := exec.Command(bin, append(args, path)...)
 	var stderr bytes.Buffer

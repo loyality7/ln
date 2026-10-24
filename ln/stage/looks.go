@@ -45,6 +45,22 @@ func (l *ToonLook) Render(sh Shot) anim.Frame {
 	return ink.RenderToon(sh.Scene, sh.Cam.Eye, sh.Cam.Center, sh.Cam.Up, sh.W, sh.H, sh.Cam.Fovy, st, sh.Mats, sh.Overlays)
 }
 
+// ColourLook is a flat-colour illustration that still reads as 3D: every object is painted its
+// colour (Node.Paint) in three tones from the light, with ink outlines over it, as vector shapes.
+type ColourLook struct {
+	Style   ink.Style
+	BoilFPS float64
+}
+
+// NewColourLook starts from the clean toon style, so lines are brush-weight and hatching is light.
+func NewColourLook() *ColourLook { return &ColourLook{Style: ink.ToonStyle(), BoilFPS: 8} }
+
+func (l *ColourLook) Render(sh Shot) anim.Frame {
+	st := boil(l.Style, l.BoilFPS, sh.Time)
+	st.Rig, st.Background = &sh.Rig, sh.Sky
+	return ink.RenderColour(sh.Scene, sh.Cam.Eye, sh.Cam.Center, sh.Cam.Up, sh.W, sh.H, sh.Cam.Fovy, st, sh.Mats, sh.Overlays)
+}
+
 // ASCIILook draws the scene as text characters.
 type ASCIILook struct{ Options ascii.Options }
 

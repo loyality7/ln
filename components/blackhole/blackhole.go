@@ -36,6 +36,8 @@ type Params struct {
 	Rings    float64 // ring spacing: each ring is this much (e.g. 1.05 = 5%) farther out than the last
 	Spokes   int     // spokes drawn around the disk
 	Stars    float64 // 0..1, how many stars
+	Colour   bool    // glowing colour (heat of the gas, Doppler shift, tinted stars) instead of white ink
+	Heat     float64 // temperature of the innermost gas in kelvin when Colour is on (0 = 9000)
 }
 
 // Default is a level, near edge-on view.
@@ -48,6 +50,17 @@ type vec = geom.Vector
 
 // criticalImpact is how close to a mass a ray of light must aim to be captured (3*sqrt(3)*M).
 func criticalImpact(g physics.Gravity) float64 { return 3 * math.Sqrt(3) * g.M }
+
+// glow is the colour of gas at radius r seen with Doppler factor g: hotter inside, and
+// shifted bluer where the gas comes toward us and redder where it moves away.
+func (p Params) glow(r, g float64) ink.Color {
+	t := p.Heat
+	if t == 0 {
+		t = 9000
+	}
+	red, green, blue := physics.Blackbody(physics.PowerLaw(r, p.DiskIn, t, 0.75) * math.Max(0.35, math.Min(2.2, g)))
+	return ink.RGB(red, green, blue)
+}
 
 func sqr(x float64) float64 { return x * x }
 
@@ -140,7 +153,12 @@ func Draw(p Params) *ink.Drawing {
 			a := 2 * math.Pi * float64(q) / 8
 			ring[q] = geom.Vector{X: cx + r*math.Cos(a), Y: cy + r*math.Sin(a)}
 		}
-		space.Fills = append(space.Fills, ink.Fill{Loops: []geom.Path{ring}, White: true})
+		starCol := ink.Color{}
+		if p.Colour { // a few warm and cool stars, most near white
+			red, green, blue := physics.Blackbody(3500 + 9000*hash2(cx, cy))
+			starCol = ink.RGB(0.55+0.45*red, 0.55+0.45*green, 0.55+0.45*blue)
+		}
+		space.Fills = append(space.Fills, ink.Fill{Loops: []geom.Path{ring}, White: true, Color: starCol})
 	}
 
 	// the disk, for each of its two images (the near face, and the far side bent over
@@ -179,7 +197,12 @@ func Draw(p Params) *ink.Drawing {
 			hot := physics.Radiance(physics.PowerLaw(levels[li], p.DiskIn, 1, 0.75)) // hotter, so heavier, toward the middle
 			base := (0.45 + 1.15*math.Pow(hot, 0.3)) * k * weight
 			for _, path := range paths {
-				lines.Lines = append(lines.Lines, ink.Line{Pts: path, W: beamed(path, base), White: true})
+				line := ink.Line{Pts: path, W: beamed(path, base), White: true}
+				if p.Colour {
+					m := path[len(path)/2]
+					line.Color = p.glow(levels[li], gf[min(p.H-1, max(0, int(m.Y)))*p.W+min(p.W-1, max(0, int(m.X)))])
+				}
+				lines.Lines = append(lines.Lines, line)
 			}
 		}
 		if p.Spokes > 0 && img == 0 {
@@ -194,7 +217,11 @@ func Draw(p Params) *ink.Drawing {
 				}
 			}
 			for _, path := range ink.IsoLines(sf, loose, p.W, p.H, []float64{0}, 1, 1)[0] {
-				lines.Lines = append(lines.Lines, ink.Line{Pts: path, W: beamed(path, 0.4*k), White: true})
+				line := ink.Line{Pts: path, W: beamed(path, 0.4*k), White: true}
+				if p.Colour {
+					line.Color = ink.RGBA(1, 0.62, 0.3, 0.55)
+				}
+				lines.Lines = append(lines.Lines, line)
 			}
 		}
 	}
@@ -208,7 +235,11 @@ func Draw(p Params) *ink.Drawing {
 		ring[q] = geom.Vector{X: float64(p.W)/2 + ringR*math.Cos(a), Y: float64(p.H)/2 + ringR*math.Sin(a)}
 		w[q] = 1.4 * k
 	}
-	lines.Lines = append(lines.Lines, ink.Line{Pts: ring, W: w, White: true})
+	photon := ink.Line{Pts: ring, W: w, White: true}
+	if p.Colour {
+		photon.Color = ink.RGB(1, 0.93, 0.8)
+	}
+	lines.Lines = append(lines.Lines, photon)
 
 	return ink.NewDrawing(float64(p.W), float64(p.H), space, lines)
 }

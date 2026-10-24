@@ -66,6 +66,7 @@ func main() {
 	format := flag.String("fmt", "mp4", "mp4 | gif | webm")
 	still := flag.Float64("still", -1, "write one picture at this time in seconds instead of a video")
 	out := flag.String("out", "out/space/blackhole", "output path without extension")
+	colour := flag.Bool("colour", false, "glowing colour: hot gold inside, red outside, bluer on the side moving toward us")
 	flag.Parse()
 
 	duration := tour[len(tour)-1].t
@@ -73,6 +74,7 @@ func main() {
 		p := blackhole.Default(*w, *h)
 		p.Distance, p.Incline, p.Azimuth = camera(t)
 		p.Time = t
+		p.Colour = *colour
 		return &p
 	}
 	os.MkdirAll("out/space", 0o755)

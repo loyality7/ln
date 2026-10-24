@@ -118,6 +118,9 @@ func (n *Node) tag() (int, ink.Material) {
 // Ink sets how the manga look draws this object (solid black, never-shaded lamps, ...).
 func (n *Node) Ink(m ink.Material) *Node { n.mat = m; return n }
 
+// Paint sets the colour this object is drawn in by ColourLook.
+func (n *Node) Paint(c ink.Color) *Node { n.mat.Color = c; return n }
+
 // Emit makes the node a lamp: a point light at its position that fades with
 // distance (half power at radius). It lights the scene in every look.
 func (n *Node) Emit(power, radius float64) *Node {

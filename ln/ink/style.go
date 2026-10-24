@@ -33,6 +33,9 @@ type Style struct {
 	SkyBandStep int        // pen-line band spacing in buffer rows (0 = 5)
 	BlackAt     float64    // toon: shadow darkness at which paper turns solid black (0 = never)
 	DarkBoost   float64    // toon: extra line weight on the shadow side
+	Sky         [3]Color   // colour: the sky from its lightest to its darkest part (Sky[0] unset: sky left paper-white)
+	Highlight   float64    // colour: how much lighter lit faces are painted than the base colour (0 = 0.28)
+	Shadow      float64    // colour: how much darker shaded faces are painted (0 = 0.42)
 }
 
 // ToonStyle is the clean manga look: full-resolution shading, solid blacks,

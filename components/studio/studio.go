@@ -116,10 +116,17 @@ func (s *Scene) render() error {
 	return s.Video(path)
 }
 
-// Look picks how the scene is drawn: "ink", "manga", "sketch", "technical" or "ascii".
+// Look picks how the scene is drawn: "ink", "manga", "sketch", "technical", "colour" or "ascii".
+// "colour" paints each object its Node.Paint colour in three tones from the light, under ink outlines.
 func (s *Scene) Look(name string) {
 	if name == "ascii" {
 		s.Stage.Look = stage.NewASCIILook(130)
+		return
+	}
+	if name == "colour" {
+		l := stage.NewColourLook()
+		l.Style.Sky = [3]ink.Color{ink.RGB(0.99, 0.78, 0.45), ink.RGB(0.9, 0.38, 0.28), ink.RGB(0.3, 0.14, 0.36)}
+		s.Stage.Look = l
 		return
 	}
 	style, ok := ink.Preset(name)
@@ -132,6 +139,13 @@ func (s *Scene) Look(name string) {
 		return
 	}
 	s.Stage.Look = &stage.InkLook{Style: style, BoilFPS: 12}
+}
+
+// SkyColours sets the sky of the "colour" look, from its lightest to its darkest part.
+func (s *Scene) SkyColours(light, mid, dark ink.Color) {
+	if l, ok := s.Stage.Look.(*stage.ColourLook); ok {
+		l.Style.Sky = [3]ink.Color{light, mid, dark}
+	}
 }
 
 // Time sets the hour of day, 0-24.

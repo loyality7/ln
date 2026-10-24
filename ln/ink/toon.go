@@ -27,6 +27,9 @@ type Material struct {
 	// BlackAt overrides the style's shadow threshold for this object: shade
 	// deeper than this turns solid black. 0 keeps the style default; 2 never blackens.
 	BlackAt float64
+
+	// Color is the paint of the object for RenderColour (unset: left paper-white).
+	Color Color
 }
 
 func DefaultMaterial() Material { return Material{Class: Paper, Tone: true, Line: true, LineW: 1} }

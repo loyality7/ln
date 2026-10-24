@@ -43,16 +43,20 @@ func Emit(p Params) *glow.Canvas {
 		x, y := k%p.W, p.H-1-k/p.W // buffers run bottom-up, canvases top-down
 		for n, s := range g.Crosses[k] {
 			r := math.Hypot(s.P.X, s.P.Y)
-			vel := geom.V(-s.P.Y, s.P.X, 0).Normalize().MulScalar(grav.CircularSpeed(r))
-			shift := physics.Doppler(vel, s.Heading.MulScalar(-1)) * grav.TimeDilation(r)
-			kelvin := physics.PowerLaw(r, p.DiskIn, heat, 0.75) * shift
-			red, green, blue := physics.Blackbody(kelvin * 0.55) // the light is read cooler than the gas is hot, so it glows orange, not white
+			// the heat of the gas depends on its radius alone, so every side of every ring glows
+			kelvin := physics.PowerLaw(r, p.DiskIn, heat, 0.75)
+			// Doppler only tints and gently brightens: bluer and a little brighter coming toward us
+			dop := physics.Doppler(geom.V(-s.P.Y, s.P.X, 0).Normalize().MulScalar(grav.CircularSpeed(r)), s.Heading.MulScalar(-1))
+			dop = math.Max(0.75, math.Min(1.3, dop))
+			red, green, blue := physics.Blackbody(kelvin * 0.55 * dop)
+			// the rings of the line version, as bands of light: one every few percent of radius
+			ring := 0.5 + 0.5*math.Cos(2*math.Pi*math.Log(r/p.DiskIn)/math.Log(p.Rings*1.9))
 			// swirling bands in the gas: inner gas laps the outer, so the pattern shears as time passes
 			psi := math.Atan2(s.P.Y, s.P.X) + p.Time*p.Spin*grav.AngularVelocity(r)
-			swirl := 0.62 + 0.26*math.Sin(11*psi+7*math.Log(r)) + 0.12*math.Sin(23*psi-13*math.Log(r))
-			power := math.Pow(kelvin/heat, 6.5) * swirl * 2.2
+			swirl := 0.7 + 0.2*math.Sin(11*psi+7*math.Log(r)) + 0.1*math.Sin(23*psi-13*math.Log(r))
+			power := math.Pow(kelvin/heat, 2.6) * (0.35 + 0.65*ring) * swirl * math.Pow(dop, 1.2) * 1.5
 			if n == 1 {
-				power *= 0.8 // the bent image is a little dimmer
+				power *= 0.85 // the bent image is a little dimmer
 			}
 			c.Add(x, y, red*power, green*power, blue*power)
 		}

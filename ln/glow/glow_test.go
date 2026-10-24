@@ -1,6 +1,10 @@
 package glow
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/loyality7/ln/ln/geom"
+)
 
 func TestLightBloomsAndNeverClips(t *testing.T) {
 	c := New(80, 80)
@@ -25,5 +29,22 @@ func TestStreakIsBrighterAtItsHead(t *testing.T) {
 	c.Streak(10, 20, 90, 20, 1, 1, 1, 1)
 	if c.Luma(88, 20) <= 3*c.Luma(30, 20) {
 		t.Fatalf("head %v tail %v", c.Luma(88, 20), c.Luma(30, 20))
+	}
+}
+
+func TestPathBrightnessDoesNotDependOnPointCount(t *testing.T) {
+	few, many := New(60, 20), New(60, 20)
+	few.Path(geom.Path{{X: 5, Y: 10}, {X: 55, Y: 10}}, 1, 1, 1, 1)
+	var dense geom.Path
+	for x := 5.0; x <= 55; x += 1 {
+		dense = append(dense, geom.Vector{X: x, Y: 10})
+	}
+	many.Path(dense, 1, 1, 1, 1)
+	a, b := few.Luma(30, 10), many.Luma(30, 10)
+	if a < 0.3 || b/a > 1.15 || b/a < 0.87 {
+		t.Fatalf("a line of 2 points %v and of 51 points %v should glow the same", a, b)
+	}
+	if few.Luma(30, 16) > 0.1*a {
+		t.Fatal("the glow must fade away from the line")
 	}
 }

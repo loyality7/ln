@@ -8,6 +8,8 @@ import (
 	"image"
 	"image/color"
 	"math"
+
+	"github.com/loyality7/ln/ln/geom"
 )
 
 // Canvas holds linear light, three floats per pixel, row 0 at the top. Values can go far above 1:
@@ -56,6 +58,23 @@ func (c *Canvas) Streak(x0, y0, x1, y1, width, r, g, b float64) {
 		t := float64(k) / float64(n-1)
 		f := t * t // bright at the head
 		c.Spot(x0+(x1-x0)*t, y0+(y1-y0)*t, width, r*f, g*f, b*f)
+	}
+}
+
+// Path shines a glowing line along a polyline (points in canvas pixels, row 0 at the top): soft spots of the
+// given radius every fraction of a pixel, so the line is smooth and its brightness does not depend on how
+// many points the path has. Use it to draw line art as light.
+func (c *Canvas) Path(p geom.Path, radius, r, g, b float64) {
+	const step = 0.7
+	for i := 0; i+1 < len(p); i++ {
+		a, d := p[i], p[i+1]
+		length := math.Hypot(d.X-a.X, d.Y-a.Y)
+		n := int(math.Max(1, math.Ceil(length/step)))
+		w := math.Max(length, 1e-9) / float64(n) * 0.55 // each spot carries the length it stands for
+		for k := 0; k < n; k++ {
+			t := (float64(k) + 0.5) / float64(n)
+			c.Spot(a.X+(d.X-a.X)*t, a.Y+(d.Y-a.Y)*t, radius, r*w, g*w, b*w)
+		}
 	}
 }
 

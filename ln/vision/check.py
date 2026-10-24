@@ -49,13 +49,20 @@ def thumb(img):
 
 
 def is_cut(a, b):
-    """The same test the converter uses: the footage changed completely between two frames."""
-    diff = float(np.abs(a - b).mean())
+    """A cut between two frames (their 32x32 thumbnails): the picture changed completely. A flash, a fade or a
+    strobe changes brightness but not what is where, so the test compares the shapes (each frame's brightness
+    pattern with its own average and spread removed), not the brightness itself."""
+    ga, gb = a.mean(axis=2), b.mean(axis=2)
+    sa, sb = float(ga.std()), float(gb.std())
+    if sa < 3.0 or sb < 3.0:  # a blank or near-blank frame (a blackout) has no shapes to disagree with
+        return False
+    corr = float(((ga - ga.mean()) * (gb - gb.mean())).mean() / (sa * sb))
     ha = cv2.calcHist([a.astype(np.uint8)], [0, 1, 2], None, [6, 6, 6], [0, 256] * 3)
     hb = cv2.calcHist([b.astype(np.uint8)], [0, 1, 2], None, [6, 6, 6], [0, 256] * 3)
     cv2.normalize(ha, ha, 1, 0, cv2.NORM_L1)
     cv2.normalize(hb, hb, 1, 0, cv2.NORM_L1)
-    return diff > 40 or (diff > 18 and cv2.compareHist(ha, hb, cv2.HISTCMP_BHATTACHARYYA) > 0.5)
+    diff = float(np.abs(a - b).mean())
+    return corr < 0.2 and (diff > 18 or cv2.compareHist(ha, hb, cv2.HISTCMP_BHATTACHARYYA) > 0.5)
 
 
 def warp_back(img, flow):

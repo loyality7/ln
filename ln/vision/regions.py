@@ -120,7 +120,11 @@ def merge_close(centres, limit):
 
 
 def lift(frame, target=72.0):
-    """Brighten a dark picture (gamma only, never darkens) so shapes in shadow still separate into patches."""
+    """Brighten a dark picture (never darkens) so shapes in shadow still separate into patches: first stretch
+    its own range over the whole scale, if it only uses a small part of it, then a gamma toward `target`."""
+    hi = float(np.percentile(frame.max(axis=2), 99.5))  # the brightest channel, so pure red is not "dim"
+    if hi < 110:  # a dim picture: scale every channel by the same amount, so colours stay as they were
+        frame = np.clip(frame.astype(np.float32) * (180.0 / max(hi, 12.0)), 0, 255).astype(np.uint8)
     m = float(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY).mean())
     if m >= target:
         return frame
@@ -134,15 +138,20 @@ def tiny(frame):
 
 
 def is_cut(a, b):
-    """A cut between two frames (their 32x32 thumbnails): the picture changed completely, not just moved."""
-    diff = float(np.abs(a - b).mean())
+    """A cut between two frames (their 32x32 thumbnails): the picture changed completely. A flash, a fade or a
+    strobe changes brightness but not what is where, so the test compares the shapes (each frame's brightness
+    pattern with its own average and spread removed), not the brightness itself."""
+    ga, gb = a.mean(axis=2), b.mean(axis=2)
+    sa, sb = float(ga.std()), float(gb.std())
+    if sa < 3.0 or sb < 3.0:  # a blank or near-blank frame (a blackout) has no shapes to disagree with
+        return False
+    corr = float(((ga - ga.mean()) * (gb - gb.mean())).mean() / (sa * sb))
     ha = cv2.calcHist([a.astype(np.uint8)], [0, 1, 2], None, [6, 6, 6], [0, 256] * 3)
     hb = cv2.calcHist([b.astype(np.uint8)], [0, 1, 2], None, [6, 6, 6], [0, 256] * 3)
     cv2.normalize(ha, ha, 1, 0, cv2.NORM_L1)
     cv2.normalize(hb, hb, 1, 0, cv2.NORM_L1)
-    # a dissolve or fast camera move changes the picture a lot but steadily; a cut changes it at once and
-    # also changes what colours it is made of
-    return diff > 40 or (diff > 18 and cv2.compareHist(ha, hb, cv2.HISTCMP_BHATTACHARYYA) > 0.5)
+    diff = float(np.abs(a - b).mean())
+    return corr < 0.2 and (diff > 18 or cv2.compareHist(ha, hb, cv2.HISTCMP_BHATTACHARYYA) > 0.5)
 
 
 def palette_from(frames, colours, merge):

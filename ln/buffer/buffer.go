@@ -11,6 +11,7 @@ import (
 
 	"github.com/loyality7/ln/ln/geom"
 	"github.com/loyality7/ln/ln/light"
+	"github.com/loyality7/ln/ln/physics"
 	"github.com/loyality7/ln/ln/scene"
 	"github.com/loyality7/ln/ln/shapes"
 )
@@ -19,6 +20,18 @@ type Camera struct {
 	Eye, Center, Up geom.Vector
 	Fovy            float64 // vertical field of view, degrees
 	Near, Far       float64
+	// Layers is how many surface crossings to remember per pixel (0 = just the first).
+	// Only useful with a bent scene (Scene.Bend), where one ray can meet the same
+	// surface twice: once directly and once bent around the mass.
+	Layers int
+}
+
+// Surface is one place a camera ray met a shape.
+type Surface struct {
+	P, N    geom.Vector
+	T       float64     // distance travelled along the ray to get there
+	ID      int         // object tag
+	Heading geom.Vector // unit direction the ray was travelling on arrival
 }
 
 // Matrix is the view-projection matrix for the given aspect ratio.
@@ -45,8 +58,16 @@ type Buffers struct {
 	ID       []int         // object tag (0 = untagged); negative means seen in a mirror
 	Refl     []bool        // the pixel is a mirror (it shows a reflection or the reflected sky)
 	Dark     []float64     // 0 lit .. 1 black, from the light rig
-	Dir      []geom.Vector // view ray, for sky and background shading
+	Dir      []geom.Vector // view ray, for sky and background shading (for a bent ray that left the scene: the direction it left along)
+
+	// Only filled for bent scenes (Scene.Bend):
+	Void    []bool        // the ray fell into the field's capture radius (a horizon)
+	Exit    []geom.Vector // the direction an escaped ray left along (zero if it fell in)
+	Crosses [][]Surface   // with Camera.Layers > 0: every crossing, nearest first
 }
+
+// IsVoid reports whether pixel k's ray was swallowed by the field.
+func (g *Buffers) IsVoid(k int) bool { return g.Void != nil && g.Void[k] }
 
 func Rows(h int, f func(j int)) {
 	var wg sync.WaitGroup
@@ -72,17 +93,55 @@ func Gather(s *scene.Scene, cam Camera, w, h int, rig light.Rig) *Buffers {
 		ID: make([]int, n), Refl: make([]bool, n), Dark: make([]float64, n), Dir: make([]geom.Vector, n)}
 	inv := g.ViewProj.Inverse()
 	known := make([]bool, n) // normal came from the shape, not an estimate
+	bent := s.Bend != nil
+	if bent {
+		g.Void, g.Exit = make([]bool, n), make([]geom.Vector, n)
+		if cam.Layers > 0 {
+			g.Crosses = make([][]Surface, n)
+		}
+	}
 	Rows(h, func(j int) {
 		for i := 0; i < w; i++ {
 			k := j*w + i
 			ndc := geom.Vector{X: (float64(i)+0.5)/float64(w)*2 - 1, Y: (float64(j)+0.5)/float64(h)*2 - 1, Z: 1}
 			dir := inv.MulPositionW(ndc).Sub(cam.Eye).Normalize()
 			g.Dir[k] = dir
-			hit := s.Intersect(geom.Ray{Origin: cam.Eye, Direction: dir})
+			var hit shapes.Hit
+			var firstAt, firstHeading geom.Vector
+			if bent {
+				hit = shapes.NoHit
+				seen := 0
+				outcome, exit := s.March(geom.Ray{Origin: cam.Eye, Direction: dir}, func(h shapes.Hit, at, heading geom.Vector) bool {
+					if seen == 0 {
+						hit, firstAt, firstHeading = h, at, heading
+					}
+					seen++
+					if cam.Layers > 0 {
+						sf := Surface{P: at, N: h.Normal, T: h.T, Heading: heading}
+						if tg, ok := h.Shape.(interface{ Tag() int }); ok {
+							sf.ID = tg.Tag()
+						}
+						g.Crosses[k] = append(g.Crosses[k], sf)
+					}
+					return seen < max(1, cam.Layers)
+				})
+				switch outcome {
+				case physics.Captured:
+					g.Void[k] = true
+				case physics.Escaped:
+					g.Exit[k] = exit
+					g.Dir[k] = exit
+				}
+			} else {
+				hit = s.Intersect(geom.Ray{Origin: cam.Eye, Direction: dir})
+			}
 			if !hit.Ok() {
 				continue
 			}
 			dist, pos, mirrored := hit.T, cam.Eye.Add(dir.MulScalar(hit.T)), false
+			if bent { // the ray curved on the way: use where it really arrived
+				pos, dir = firstAt, firstHeading
+			}
 			if m, ok := hit.Shape.(shapes.Reflector); ok && m.Reflectivity() > 0 {
 				n := hit.Normal
 				if n.Dot(dir) > 0 {

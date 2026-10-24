@@ -60,7 +60,7 @@ func TestLightBendsByFourMOverB(t *testing.T) {
 func TestCapturedInsideTheCriticalImpactParameter(t *testing.T) {
 	g := Gravity{M: 1}
 	f := Field{Law: g.Light(), Capture: g.SchwarzschildRadius(), Escape: 1000}
-	crit := g.CriticalImpactParameter()
+	crit := 3 * math.Sqrt(3) * g.M // aim closer than this and light cannot escape
 	for _, c := range []struct {
 		b    float64
 		want Outcome
@@ -124,8 +124,8 @@ func TestDopplerAndBeaming(t *testing.T) {
 }
 
 func TestThermalRadiation(t *testing.T) {
-	if ThinDiskTemperature(24, 6, 1) >= ThinDiskTemperature(12, 6, 1) || !near(ThinDiskTemperature(6, 6, 7), 7, 1e-12) {
-		t.Fatal("a thin disk is hottest at its inner edge")
+	if PowerLaw(24, 6, 1, 0.75) >= PowerLaw(12, 6, 1, 0.75) || !near(PowerLaw(6, 6, 7, 0.75), 7, 1e-12) {
+		t.Fatal("a power law is largest at its reference radius and falls outward")
 	}
 	if Radiance(2) != 16 {
 		t.Fatal("radiance grows as T^4")

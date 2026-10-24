@@ -3,12 +3,16 @@ package scene
 import (
 	"github.com/loyality7/ln/ln/accel"
 	"github.com/loyality7/ln/ln/geom"
+	"github.com/loyality7/ln/ln/physics"
 	"github.com/loyality7/ln/ln/shapes"
 )
 
 type Scene struct {
 	Shapes []shapes.Shape
 	Tree   *accel.Tree
+	// Bend, if set, curves every camera ray around a central mass or field, so the
+	// scene is seen through gravitational lensing. Nil means straight rays.
+	Bend *physics.Field
 }
 
 func (s *Scene) Compile() {
@@ -76,4 +80,41 @@ func (s *Scene) render(matrix geom.Matrix, eye geom.Vector, width, height, step 
 	}
 	matrix = geom.Translate(geom.Vector{X: 1, Y: 1}).Scale(geom.Vector{X: width / 2, Y: height / 2, Z: zs})
 	return paths.Transform(matrix)
+}
+
+// March follows a camera ray through the scene, calling visit for each surface it
+// crosses, nearest first: the hit (with T the distance travelled along the possibly
+// curved path), the point, and the unit direction the ray was heading there. visit
+// returns false to stop. It returns how the ray ended and, if it escaped a Bend field,
+// the direction it left along. Without Bend the ray is straight and visit is called
+// at most once.
+func (s *Scene) March(r geom.Ray, visit func(h shapes.Hit, at, heading geom.Vector) bool) (physics.Outcome, geom.Vector) {
+	if s.Bend == nil {
+		if h := s.Intersect(r); h.Ok() {
+			visit(h, r.Position(h.T), r.Direction)
+		}
+		return physics.Escaped, r.Direction
+	}
+	box := s.Tree.Box
+	travelled := 0.0
+	return s.Bend.Trace(r.Origin, r.Direction, func(seg physics.Segment) bool {
+		step := seg.To.Sub(seg.From)
+		length := step.Length()
+		if length == 0 {
+			return true
+		}
+		dir := step.MulScalar(1 / length)
+		ray := geom.Ray{Origin: seg.From, Direction: dir}
+		if t1, t2 := box.Intersect(ray); !(t2 < t1 || t2 <= 0 || t1 > length+1e-3) { // written so a NaN (axis-parallel ray) is not rejected
+			if h := s.Tree.Intersect(ray); h.Ok() && h.T <= length+1e-3 { // shapes ignore hits closer than 1e-3, so a crossing at a joint belongs to the earlier segment
+				h.T += travelled
+				if !visit(h, ray.Position(h.T-travelled), dir) {
+					travelled += length
+					return false
+				}
+			}
+		}
+		travelled += length
+		return true
+	})
 }

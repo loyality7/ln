@@ -13,7 +13,7 @@ type Class uint8
 
 const (
 	Paper Class = iota // white; light and shadow decide hatching and solid shadow
-	Black              // always solid black (hair, dark clothes)
+	Black              // always solid black (dark objects)
 	White              // never shaded: lamps, glowing windows, highlights
 )
 
@@ -35,13 +35,13 @@ func DefaultMaterial() Material { return Material{Class: Paper, Tone: true, Line
 type Slot int
 
 const (
-	UnderBlack Slot = iota // face details: hidden wherever hair or shadow is painted over them
-	OverBlack              // highlights cut out of black areas
+	UnderBlack Slot = iota // detail art: hidden wherever solid black is painted over it
+	OverBlack              // cut-outs from black areas
 	Backdrop               // behind everything: speed lines, panels; the figure gets a paper-white base over it
 )
 
-// Overlay is vector art computed from the 3D scene each frame (eyes, brows,
-// hair highlights). Draw projects 3D points through the Ctx.
+// Overlay is vector art computed from the 3D scene each frame (marks,
+// highlights, labels). Draw projects 3D points through the Ctx.
 type Overlay struct {
 	Slot Slot
 	Draw func(c *Ctx) Layer
@@ -142,14 +142,14 @@ func RenderToon(s *scene.Scene, eye, center, up geom.Vector, width, height, fovy
 	hatchLayer.Lines = append(hatchLayer.Lines, skyBands...)
 	dr.addLayer(hatchLayer)
 
-	// layer: face details that hair and shadow paint over
+	// layer: detail art that solid black paints over
 	for _, o := range overlays {
 		if o.Slot == UnderBlack {
 			dr.addLayer(o.Draw(ctx))
 		}
 	}
 
-	// layer: solid black regions (shadows, hair, night sky) as smooth vector shapes
+	// layer: solid black regions (shadows, dark objects, night sky) as smooth vector shapes
 	fill := maskFill(black, gw, gh, sx, sy, st.Smooth)
 	dr.addLayer(Layer{Fills: []Fill{fill}})
 

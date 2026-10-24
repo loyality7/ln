@@ -31,7 +31,7 @@ func (l *InkLook) Render(sh Shot) anim.Frame {
 }
 
 // ToonLook is clean manga ink: solid blacks, brush-weight contours, light
-// hatching, plus any overlays (faces, highlights).
+// hatching, plus any overlays (marks, highlights).
 type ToonLook struct {
 	Style   ink.Style
 	BoilFPS float64

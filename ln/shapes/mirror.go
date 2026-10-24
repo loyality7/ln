@@ -10,27 +10,29 @@ import (
 // ray on after the bounce, so the surface shows whatever it reflects.
 type Reflector interface{ Reflectivity() float64 }
 
-// Water is a horizontal mirror at height Level, optionally rippled. Height is
+// Mirror is a horizontal mirror at height Level, optionally rippled. Height is
 // the wave elevation at (x, y); only its slope matters, scaled by Amp, so
 // reflections wobble without the surface actually moving.
-type Water struct {
+type Mirror struct {
 	Level, Half float64 // surface height; the sheet covers [-Half, Half] in x and y
 	Height      func(x, y float64) float64
 	Amp         float64
 	Gloss       float64 // reflectivity, 0..1
 }
 
-func NewWater(level, half float64) *Water { return &Water{Level: level, Half: half, Amp: 1, Gloss: 1} }
+func NewMirror(level, half float64) *Mirror {
+	return &Mirror{Level: level, Half: half, Amp: 1, Gloss: 1}
+}
 
-func (w *Water) Compile() {}
-func (w *Water) BoundingBox() geom.Box {
+func (w *Mirror) Compile() {}
+func (w *Mirror) BoundingBox() geom.Box {
 	return geom.Box{Min: geom.Vector{X: -w.Half, Y: -w.Half, Z: w.Level - 0.05}, Max: geom.Vector{X: w.Half, Y: w.Half, Z: w.Level + 0.05}}
 }
-func (w *Water) Contains(geom.Vector, float64) bool { return false }
-func (w *Water) Paths() geom.Paths                  { return nil }
-func (w *Water) Reflectivity() float64              { return w.Gloss }
+func (w *Mirror) Contains(geom.Vector, float64) bool { return false }
+func (w *Mirror) Paths() geom.Paths                  { return nil }
+func (w *Mirror) Reflectivity() float64              { return w.Gloss }
 
-func (w *Water) Intersect(r geom.Ray) Hit {
+func (w *Mirror) Intersect(r geom.Ray) Hit {
 	if math.Abs(r.Direction.Z) < 1e-9 {
 		return NoHit
 	}

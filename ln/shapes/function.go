@@ -58,23 +58,6 @@ func (f *Function) normalAt(v geom.Vector) geom.Vector {
 	return geom.Vector{X: -fx, Y: -fy, Z: 1}.Normalize()
 }
 
-func (f *Function) Paths3() geom.Paths {
-	var path geom.Path
-	n := 10000
-	for i := 0; i < n; i++ {
-		t := float64(i) / float64(n)
-		r := 8 - math.Pow(t, 0.1)*8
-		x := math.Cos(geom.Radians(t*2*math.Pi*3000)) * r
-		y := math.Sin(geom.Radians(t*2*math.Pi*3000)) * r
-		z := f.Function(x, y)
-		z = math.Min(z, f.Box.Max.Z)
-		z = math.Max(z, f.Box.Min.Z)
-		path = append(path, geom.Vector{x, y, z})
-	}
-	// return append(f.Paths2(), path)
-	return geom.Paths{path}
-}
-
 func (f *Function) Paths() geom.Paths {
 	var paths geom.Paths
 	fine := 1.0 / 256
@@ -87,33 +70,6 @@ func (f *Function) Paths() geom.Paths {
 			o := -math.Pow(-z, 1.4)
 			x = math.Cos(geom.Radians(float64(a))-o) * r
 			y = math.Sin(geom.Radians(float64(a))-o) * r
-			z = math.Min(z, f.Box.Max.Z)
-			z = math.Max(z, f.Box.Min.Z)
-			path = append(path, geom.Vector{x, y, z})
-		}
-		paths = append(paths, path)
-	}
-	return paths
-}
-
-func (f *Function) Paths1() geom.Paths {
-	var paths geom.Paths
-	step := 1.0 / 8
-	fine := 1.0 / 64
-	for x := f.Box.Min.X; x <= f.Box.Max.X; x += step {
-		var path geom.Path
-		for y := f.Box.Min.Y; y <= f.Box.Max.Y; y += fine {
-			z := f.Function(x, y)
-			z = math.Min(z, f.Box.Max.Z)
-			z = math.Max(z, f.Box.Min.Z)
-			path = append(path, geom.Vector{x, y, z})
-		}
-		paths = append(paths, path)
-	}
-	for y := f.Box.Min.Y; y <= f.Box.Max.Y; y += step {
-		var path geom.Path
-		for x := f.Box.Min.X; x <= f.Box.Max.X; x += fine {
-			z := f.Function(x, y)
 			z = math.Min(z, f.Box.Max.Z)
 			z = math.Max(z, f.Box.Min.Z)
 			path = append(path, geom.Vector{x, y, z})

@@ -60,7 +60,7 @@ func (n *Node) Add(m *model.Mesh) *Node {
 	return c
 }
 
-// Place adds an analytic shape (such as shapes.Water) that moves with this node.
+// Place adds an analytic shape (such as shapes.Mirror) that moves with this node.
 func (n *Node) Place(s shapes.Shape) *Node {
 	c := n.Group("shape")
 	c.shape = s
@@ -115,7 +115,7 @@ func (n *Node) tag() (int, ink.Material) {
 	return n.id, n.mat
 }
 
-// Ink sets how the manga look draws this object (solid black hair, never-shaded lamps, ...).
+// Ink sets how the manga look draws this object (solid black, never-shaded lamps, ...).
 func (n *Node) Ink(m ink.Material) *Node { n.mat = m; return n }
 
 // Emit makes the node a lamp: a point light at its position that fades with

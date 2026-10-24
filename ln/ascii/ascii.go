@@ -125,6 +125,8 @@ func Render(g *buffer.Buffers, opt Options) *Art {
 								jump = true // a real depth discontinuity, not a slanted surface
 							}
 						}
+					} else if g.IsVoid(k) {
+						tone++
 					} else if opt.Sky != nil {
 						tone += opt.Sky.Darkness(g.Dir[k])
 					}

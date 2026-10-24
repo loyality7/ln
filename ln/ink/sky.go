@@ -42,7 +42,7 @@ func skyMask(g *buffer.Buffers, bg Background, black []float64, W, H float64, st
 	for j := 0; j < g.H; j++ {
 		for i := 0; i < g.W; i++ {
 			k := j*g.W + i
-			if !g.OK[k] && bg.Darkness(g.Dir[k]) >= st.SkyBlackAt {
+			if !g.OK[k] && (g.IsVoid(k) || bg.Darkness(g.Dir[k]) >= st.SkyBlackAt) {
 				black[k] = 1
 			}
 		}
@@ -55,7 +55,7 @@ func skyMask(g *buffer.Buffers, bg Background, black []float64, W, H float64, st
 			var d float64
 			if i < g.W {
 				k := j*g.W + i
-				if !g.OK[k] {
+				if !g.OK[k] && !g.IsVoid(k) {
 					d = bg.Darkness(g.Dir[k])
 					mid = d >= st.SkyBandFrom && d < st.SkyBlackAt
 				}

@@ -12,12 +12,15 @@ import (
 	"github.com/loyality7/ln/ln/stage"
 )
 
-// Axis is the local axis a joint turns about. The zero value is Y, which suits a
-// character that moves in the x-z plane and is filmed from the side.
+// Axis is the local axis a joint turns about. The zero value, AxisDefault, means
+// "whatever the Spec says" (Spec.Axis), and a Spec that says nothing turns joints about
+// Y, which suits a figure that moves in the x-z plane and is filmed from the side. Set
+// Spec.Axis, or a joint's own Axis, to build for another view.
 type Axis int
 
 const (
-	AxisY Axis = iota
+	AxisDefault Axis = iota
+	AxisY
 	AxisX
 	AxisZ
 )
@@ -49,6 +52,7 @@ type Joint struct {
 
 // Spec describes a whole skeleton as data.
 type Spec struct {
+	Axis   Axis         // the axis joints turn about unless they name their own (zero: Y)
 	Height float64      // the height the dimensions were drawn at
 	Ink    ink.Material // default ink for limbs and parts (zero value: solid black)
 	Joints []Joint
@@ -59,6 +63,7 @@ type Skeleton struct {
 	Root           *stage.Node
 	Origin, Facing float64 // where it stands along x and which way forward points (1 or -1)
 
+	turn   Axis // the spec's default turning axis
 	joints map[string]*stage.Node
 	spec   map[string]Joint
 	order  []string
@@ -67,7 +72,7 @@ type Skeleton struct {
 // Build creates the skeleton's nodes under parent, scaled to height. It stands at
 // x = origin and faces +x (facing 1) or -x (facing -1).
 func Build(parent *stage.Node, spec Spec, height, origin, facing float64) *Skeleton {
-	s := &Skeleton{Origin: origin, Facing: facing, joints: map[string]*stage.Node{}, spec: map[string]Joint{}}
+	s := &Skeleton{Origin: origin, Facing: facing, turn: spec.Axis, joints: map[string]*stage.Node{}, spec: map[string]Joint{}}
 	s.Root = parent.Group("rig").Uniform(height / spec.Height)
 	s.Root.Pos.X = origin
 	defaultInk := spec.Ink
@@ -151,7 +156,11 @@ func (s *Skeleton) Apply(p Pose) {
 			if sign == 0 {
 				sign = 1
 			}
-			switch s.spec[name].Axis {
+			about := s.spec[name].Axis
+			if about == AxisDefault {
+				about = s.turn
+			}
+			switch about {
 			case AxisX:
 				n.Rot.X += sign * v
 			case AxisZ:

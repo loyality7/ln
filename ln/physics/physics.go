@@ -68,15 +68,6 @@ func (g Gravity) TimeDilation(r float64) float64 { return math.Sqrt(math.Max(0, 
 // that stays far from the mass (impact parameter b much larger than M): 4M/b.
 func (g Gravity) Deflection(b float64) float64 { return 4 * g.M / b }
 
-// PhotonRadius is the radius where light can orbit the mass, if the mass is compact enough.
-func (g Gravity) PhotonRadius() float64 { return 3 * g.M }
-
-// CriticalImpactParameter is how close to the mass a ray must aim to be captured.
-func (g Gravity) CriticalImpactParameter() float64 { return 3 * math.Sqrt(3) * g.M }
-
-// InnermostStableOrbit is the smallest radius a circular orbit stays stable at.
-func (g Gravity) InnermostStableOrbit() float64 { return 6 * g.M }
-
 // ---- orbits: how a path bends around a central mass -------------------------------
 
 // OrbitLaw is the physics of a central force written in the form that makes orbits
@@ -121,9 +112,9 @@ func Beaming(g, power float64) float64 { return math.Pow(g, power) }
 
 // ---- thermal radiation ----------------------------------------------------------
 
-// ThinDiskTemperature is the temperature of a thin heated disk at radius r, falling
-// as r^(-3/4) from tIn at its inner edge rIn.
-func ThinDiskTemperature(r, rIn, tIn float64) float64 { return tIn * math.Pow(rIn/r, 0.75) }
+// PowerLaw is a quantity that falls off as (r0/r)^k from v0 at r0: the temperature
+// of a thin heated disk is PowerLaw(r, rIn, tIn, 0.75).
+func PowerLaw(r, r0, v0, k float64) float64 { return v0 * math.Pow(r0/r, k) }
 
 // Radiance is the power a surface at temperature t gives off per unit area, in
 // units where the Stefan-Boltzmann constant is 1: it grows as t^4.

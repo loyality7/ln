@@ -3,7 +3,6 @@ package shapes
 import (
 	"github.com/loyality7/ln/ln/geom"
 	"math"
-	"math/rand"
 )
 
 type Sphere struct {
@@ -48,80 +47,6 @@ func (s *Sphere) Intersect(r geom.Ray) Hit {
 		}
 	}
 	return NoHit
-}
-
-func (s *Sphere) Paths4() geom.Paths {
-	var paths geom.Paths
-	var seen []geom.Vector
-	var radii []float64
-	for i := 0; i < 140; i++ {
-		var v geom.Vector
-		var m float64
-		for {
-			v = geom.RandomUnitVector()
-			m = rand.Float64()*0.25 + 0.05
-			ok := true
-			for i, other := range seen {
-				threshold := m + radii[i] + 0.02
-				if other.Sub(v).Length() < threshold {
-					ok = false
-					break
-				}
-			}
-			if ok {
-				seen = append(seen, v)
-				radii = append(radii, m)
-				break
-			}
-		}
-		p := v.Cross(geom.RandomUnitVector()).Normalize()
-		q := p.Cross(v).Normalize()
-		n := rand.Intn(4) + 1
-		for k := 0; k < n; k++ {
-			var path geom.Path
-			for j := 0; j <= 360; j += 5 {
-				a := geom.Radians(float64(j))
-				x := v
-				x = x.Add(p.MulScalar(math.Cos(a) * m))
-				x = x.Add(q.MulScalar(math.Sin(a) * m))
-				x = x.Normalize()
-				x = x.MulScalar(s.Radius).Add(s.Center)
-				path = append(path, x)
-			}
-			paths = append(paths, path)
-			m *= 0.75
-		}
-	}
-	return paths
-}
-
-func (s *Sphere) Paths3() geom.Paths {
-	var paths geom.Paths
-	for i := 0; i < 20000; i++ {
-		v := geom.RandomUnitVector()
-		v = v.MulScalar(s.Radius).Add(s.Center)
-		paths = append(paths, geom.Path{v, v})
-	}
-	return paths
-}
-
-func (s *Sphere) Paths2() geom.Paths {
-	var equator geom.Path
-	for lng := 0; lng <= 360; lng++ {
-		v := LatLngToXYZ(0, float64(lng), s.Radius)
-		equator = append(equator, v)
-	}
-	var paths geom.Paths
-	for i := 0; i < 100; i++ {
-		m := geom.Identity()
-		for j := 0; j < 3; j++ {
-			v := geom.RandomUnitVector()
-			m = m.Rotate(v, rand.Float64()*2*math.Pi)
-		}
-		m = m.Translate(s.Center)
-		paths = append(paths, equator.Transform(m))
-	}
-	return paths
 }
 
 func (s *Sphere) Paths() geom.Paths {

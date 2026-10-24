@@ -707,7 +707,7 @@ def main():
         np.put_along_axis(now, lbl[..., None], 1.0, axis=2)
         prob = now if prob is None else keep[..., None] * warp(prob, flow) + (1 - keep[..., None]) * now
         label = cv2.medianBlur(hold(prob, prev_label, flow, a.hold, imp), 5)
-        fine = label.copy()  # the same picture before merging: source of the small detail patches
+        fine_label = label.copy()  # the same picture before merging: source of the small detail patches
         label = merge_weak(label, centres, gray, K, a.border, a.merge_colour, lab_img)
         label = absorb_small(label, K, a.min_area, imp, skin_k, centres, a.stand_out)
         prev_label = label.copy()  # the settled picture, merges and all, is what the next frame holds on to
@@ -802,7 +802,7 @@ def main():
         # --- detail: small patches that differ clearly from the big patch under them go on top, so a sun
         # does not melt into its sky; busy texture (leaves, sparks) and anything faint is left out
         if a.detail_max > 0:
-            fine = absorb_small(fine, K, a.detail_area, imp, skin_k, centres, a.stand_out)
+            fine_label = absorb_small(fine_label, K, a.detail_area, imp, skin_k, centres, a.stand_out)
             n_comp = int(ids.max()) + 1
             counts = np.maximum(np.bincount(ids.ravel(), minlength=n_comp), 1)
             base_rgb = np.stack([np.bincount(ids.ravel(), weights=frame[..., 2 - ch].ravel(), minlength=n_comp) / counts for ch in range(3)], axis=1)
@@ -810,7 +810,7 @@ def main():
             zeros = np.zeros((h, w), np.int32)
             extra = []
             for k in range(K):
-                for area, loops, contrast, now_rgb, _ in shapes(fine, k, centres, a.detail_area, a.smooth, frame, zeros):
+                for area, loops, contrast, now_rgb, _ in shapes(fine_label, k, centres, a.detail_area, a.smooth, frame, zeros):
                     px, py = min(max(int(loops[0][0][0]), 0), w - 1), min(max(int(loops[0][0][1]), 0), h - 1)
                     if float(np.linalg.norm(np.array(now_rgb) - base_img[py, px])) < a.detail_min:
                         continue

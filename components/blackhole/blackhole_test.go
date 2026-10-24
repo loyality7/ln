@@ -3,28 +3,31 @@ package blackhole
 import (
 	"testing"
 
+	"github.com/loyality7/ln/ln/buffer"
 	"github.com/loyality7/ln/ln/geom"
+	"github.com/loyality7/ln/ln/light"
 	"github.com/loyality7/ln/ln/physics"
+	"github.com/loyality7/ln/ln/scene"
+	"github.com/loyality7/ln/ln/shapes"
 )
 
-func TestShadowIsDarkAndFarSideOfDiskBendsOverIt(t *testing.T) {
-	p := Default(120, 200)
+func TestShadowIsVoidAndTheDiskShowsTwice(t *testing.T) {
 	grav := physics.Gravity{M: 1}
-	field := physics.Field{Law: grav.Light(), Capture: grav.SchwarzschildRadius(), Escape: 80}
-	cam := geom.V(p.Distance, 0, p.Distance*0.075)
-	f := cam.Normalize().MulScalar(-1)
-	// the ray through the very middle of the picture falls into the hole: no star, no disk
-	s := p.trace(field, cam, f, 0.001)
-	if s.star != 0 || s.disk[0].ok {
-		t.Fatalf("the shadow must be empty, got %+v", s)
+	sc := &scene.Scene{Bend: &physics.Field{Law: grav.Light(), Capture: grav.SchwarzschildRadius(), Escape: 80}}
+	sc.Add(shapes.NewAnnulus(geom.Vector{}, 5, 30))
+	cam := buffer.Camera{Eye: geom.V(200, 0, 15), Up: geom.V(0, 0, 1), Fovy: 4, Layers: 2}
+	g := buffer.Gather(sc, cam, 64, 64, light.Rig{})
+	if !g.IsVoid(32*64 + 32) {
+		t.Fatal("the pixel at the centre of the shadow must be void")
 	}
-	// a ray aimed just above the shadow, seen near edge-on, meets the far side of the disk
-	// twice: once on the near face and once bent over the top
-	up := geom.V(0, 0, 1)
-	crit := grav.CriticalImpactParameter() / p.Distance
-	d := f.Add(up.MulScalar(crit * 1.6)).Normalize()
-	if s := p.trace(field, cam, d, 0.001); !s.disk[0].ok {
-		t.Fatalf("a ray skimming above the shadow should hit the disk, got %+v", s)
+	twice := 0
+	for _, c := range g.Crosses {
+		if len(c) == 2 {
+			twice++
+		}
+	}
+	if twice == 0 {
+		t.Fatal("some rays must meet the disk twice: directly and bent over the shadow")
 	}
 }
 

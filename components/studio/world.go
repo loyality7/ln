@@ -28,8 +28,8 @@ func (s *Scene) GroundAt(x, y float64) float64 {
 
 // Water adds a mirror lake at the given height. ripple is how strongly it
 // distorts reflections (0 = still glass, about 0.3 = gentle, 1 = rough).
-func (s *Scene) Water(level, ripple float64) *shapes.Water {
-	w := shapes.NewWater(level, 400)
+func (s *Scene) Water(level, ripple float64) *shapes.Mirror {
+	w := shapes.NewMirror(level, 400)
 	w.Amp = ripple
 	w.Height = func(x, y float64) float64 {
 		return 0.05*math.Sin(1.3*x+0.7*y) + 0.04*math.Sin(0.8*x-1.1*y+1.7) + 0.02*math.Sin(3.1*x+2.3*y)

@@ -1,11 +1,11 @@
 // Package blackhole draws a black hole as ln ink: white line art on black space.
 //
-// This package is only the scene: a disk, a camera and the drawing. The physics lives
-// in ln/physics, which any other scene can reuse: gravity bending each pixel's ray,
-// orbital speeds, the Doppler shift. Each ray is followed to find which ring and spoke
-// of the disk it lands on, so the far side of the disk arches over the top and under
-// the shadow. Rings of constant radius and spokes of constant angle then become contour
-// lines (ink.IsoLines); stars are dots; the shadow is left black.
+// It is an ordinary ln scene: a flat disk (shapes.Annulus) in a scene whose Bend field
+// curves every camera ray (ln/scene, ln/physics), rendered through buffer.Gather like
+// any other. The bent rays reach the far side of the disk twice, once directly and once
+// arched over the shadow, so Gather is asked to keep two crossings per pixel. This
+// package then only styles the result: each crossing's radius and angle become
+// contour lines (ink.IsoLines), stars are dots, the shadow is left black.
 package blackhole
 
 import (
@@ -14,7 +14,10 @@ import (
 	"github.com/loyality7/ln/ln/buffer"
 	"github.com/loyality7/ln/ln/geom"
 	"github.com/loyality7/ln/ln/ink"
+	"github.com/loyality7/ln/ln/light"
 	"github.com/loyality7/ln/ln/physics"
+	"github.com/loyality7/ln/ln/scene"
+	"github.com/loyality7/ln/ln/shapes"
 )
 
 // Params describes the camera, the disk and the drawing. The mass is 1 (geometric
@@ -38,10 +41,13 @@ type Params struct {
 // Default is a level, near edge-on view.
 func Default(w, h int) Params {
 	return Params{W: w, H: h, FOV: 0.50, Distance: 235, Incline: 0.075, DiskIn: 6, DiskOut: 30,
-		Spin: 25, Rings: 1.085, Spokes: 22, Stars: 1}
+		Spin: 4, Rings: 1.085, Spokes: 22, Stars: 1}
 }
 
 type vec = geom.Vector
+
+// criticalImpact is how close to a mass a ray of light must aim to be captured (3*sqrt(3)*M).
+func criticalImpact(g physics.Gravity) float64 { return 3 * math.Sqrt(3) * g.M }
 
 func sqr(x float64) float64 { return x * x }
 
@@ -86,35 +92,12 @@ func star(n vec, pix, density float64) float64 {
 	return best
 }
 
-// trace follows one pixel's ray through the field and records where it meets the disk.
-func (p Params) trace(field physics.Field, cam, d vec, pix float64) sample {
-	var out sample
-	hits := 0
-	outcome, exit := field.Trace(cam, d, func(s physics.Segment) bool {
-		if hits < 2 {
-			if at, _, ok := s.CrossPlane(vec{}, geom.V(0, 0, 1)); ok {
-				rc := math.Hypot(at.X, at.Y)
-				if rc >= p.DiskIn-1 && rc <= p.DiskOut {
-					// the gas orbits counter-clockwise at the circular speed; the light heads back toward us
-					vel := geom.V(-at.Y, at.X, 0).Normalize().MulScalar(physics.Gravity{M: 1}.CircularSpeed(rc))
-					g := physics.Doppler(vel, s.From.Sub(s.To).Normalize())
-					out.disk[hits] = crossing{r: rc, psi: math.Atan2(at.Y, at.X), g: g, ok: true}
-					hits++
-				}
-			}
-		}
-		return true
-	})
-	if outcome == physics.Escaped {
-		out.star = star(exit, pix, p.Stars)
-	}
-	return out
-}
-
 // Draw returns the black hole at p.Time as ink: white lines on black.
 func Draw(p Params) *ink.Drawing {
 	grav := physics.Gravity{M: 1}
-	field := physics.Field{Law: grav.Light(), Capture: grav.SchwarzschildRadius(), Escape: 80}
+	// the whole scene: a flat disk, seen through a gravity field that bends every camera ray
+	sc := &scene.Scene{Bend: &physics.Field{Law: grav.Light(), Capture: grav.SchwarzschildRadius(), Escape: 80}}
+	sc.Add(shapes.NewAnnulus(vec{}, p.DiskIn-1, p.DiskOut))
 
 	e := p.Incline
 	cam := geom.V(p.Distance*math.Cos(e)*math.Cos(p.Azimuth), p.Distance*math.Cos(e)*math.Sin(p.Azimuth), p.Distance*math.Sin(e))
@@ -122,21 +105,23 @@ func Draw(p Params) *ink.Drawing {
 	right := f.Cross(geom.V(0, 0, 1)).Normalize()
 	up := right.Cross(f)
 	cr, sr := math.Cos(p.Roll), math.Sin(p.Roll)
-	right, up = right.MulScalar(cr).Add(up.MulScalar(sr)), up.MulScalar(cr).Sub(right.MulScalar(sr))
+	up = up.MulScalar(cr).Sub(right.MulScalar(sr)) // rolled camera up
 	th := math.Tan(p.FOV / 2)
-	aspect := float64(p.W) / float64(p.H)
 	pix := 2 * th / float64(p.H)
 
-	// ray-cast every pixel (row 0 at the bottom, like the other buffers)
+	g := buffer.Gather(sc, buffer.Camera{Eye: cam, Up: up, Fovy: geom.Degrees(p.FOV), Layers: 2}, p.W, p.H, light.Rig{})
 	samples := make([]sample, p.W*p.H)
-	buffer.Rows(p.H, func(j int) {
-		for i := 0; i < p.W; i++ {
-			x := (2*(float64(i)+0.5)/float64(p.W) - 1) * aspect * th
-			y := (2*(float64(j)+0.5)/float64(p.H) - 1) * th
-			d := f.Add(right.MulScalar(x)).Add(up.MulScalar(y)).Normalize()
-			samples[j*p.W+i] = p.trace(field, cam, d, pix)
+	for idx := range samples {
+		for n, c := range g.Crosses[idx] {
+			rc := math.Hypot(c.P.X, c.P.Y)
+			// the gas orbits counter-clockwise at the circular speed; the light heads back toward us
+			vel := geom.V(-c.P.Y, c.P.X, 0).Normalize().MulScalar(grav.CircularSpeed(rc))
+			samples[idx].disk[n] = crossing{r: rc, psi: math.Atan2(c.P.Y, c.P.X), g: physics.Doppler(vel, c.Heading.MulScalar(-1)), ok: true}
 		}
-	})
+		if g.Exit[idx] != (vec{}) {
+			samples[idx].star = star(g.Exit[idx], pix, p.Stars)
+		}
+	}
 
 	k := float64(p.W) / 576 // line weights in pixels scale with the picture
 	var space, lines ink.Layer
@@ -191,21 +176,31 @@ func Draw(p Params) *ink.Drawing {
 			return w
 		}
 		for li, paths := range ink.IsoLines(rf, valid, p.W, p.H, levels, 1, 1) {
-			hot := physics.Radiance(physics.ThinDiskTemperature(levels[li], p.DiskIn, 1)) // hotter, so heavier, toward the middle
+			hot := physics.Radiance(physics.PowerLaw(levels[li], p.DiskIn, 1, 0.75)) // hotter, so heavier, toward the middle
 			base := (0.45 + 1.15*math.Pow(hot, 0.3)) * k * weight
 			for _, path := range paths {
 				lines.Lines = append(lines.Lines, ink.Line{Pts: path, W: beamed(path, base), White: true})
 			}
 		}
 		if p.Spokes > 0 && img == 0 {
-			for _, path := range ink.IsoLines(sf, valid, p.W, p.H, []float64{0}, 1, 1)[0] {
+			// spokes wound tighter than a pixel are noise, not lines: leave those cells out
+			loose := append([]bool(nil), valid...)
+			for y := 0; y+1 < p.H; y++ {
+				for x := 0; x+1 < p.W; x++ {
+					i := y*p.W + x
+					if math.Abs(sf[i+1]-sf[i]) > 0.7 || math.Abs(sf[i+p.W]-sf[i]) > 0.7 {
+						loose[i], loose[i+1], loose[i+p.W] = false, false, false
+					}
+				}
+			}
+			for _, path := range ink.IsoLines(sf, loose, p.W, p.H, []float64{0}, 1, 1)[0] {
 				lines.Lines = append(lines.Lines, ink.Line{Pts: path, W: beamed(path, 0.4*k), White: true})
 			}
 		}
 	}
 
 	// the photon ring: a thin bright circle where light nearly orbits the hole
-	ringR := math.Tan(grav.CriticalImpactParameter()/p.Distance) / th * float64(p.H) / 2
+	ringR := math.Tan(criticalImpact(grav)/p.Distance) / th * float64(p.H) / 2
 	ring := make(geom.Path, 121)
 	w := make([]float64, len(ring))
 	for q := range ring {

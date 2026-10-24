@@ -17,4 +17,5 @@ out/*
 !assets/blackhole.gif
 !assets/video_colour.gif
 !assets/video_lines.gif
+!assets/video_original.gif
 !assets/models/**

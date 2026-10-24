@@ -103,12 +103,13 @@ The stick man above and the two-man fight in the grid are scripts of this kind: 
 
 ## Video to art
 
-Give ln any video and it redraws it. It finds the cuts, gives every shot its own colour palette, keeps shapes steady from frame to frame by carrying them along the footage's motion, and writes the result as ink lines and flat colour patches. No trained model is involved. The same footage, drawn two ways:
+Give ln any video and it redraws it. It finds the cuts, gives every shot its own colour palette, keeps shapes steady from frame to frame by carrying them along the footage's motion, and writes the result as ink lines and flat colour patches. No trained model is involved. The same footage, as it was filmed and drawn two ways:
 
 <table align="center">
   <tr>
-    <td align="center" width="50%"><img src="assets/video_colour.gif" width="320" alt="A fast montage of shots redrawn as flat colour patches under thin ink lines"><br><b>Colour</b><br><sub><code>-nofill=false</code></sub></td>
-    <td align="center" width="50%"><img src="assets/video_lines.gif" width="320" alt="The same montage redrawn as thin black lines on white"><br><b>Lines only</b><br><sub>the default</sub></td>
+    <td align="center" width="33%"><img src="assets/video_original.gif" width="260" alt="The original footage: a fast montage of shots"><br><b>Original</b><br><sub>the footage we started from</sub></td>
+    <td align="center" width="33%"><img src="assets/video_colour.gif" width="260" alt="The montage redrawn by ln as flat colour patches under thin ink lines"><br><b>Drawn by ln, colour</b><br><sub><code>-nofill=false</code></sub></td>
+    <td align="center" width="33%"><img src="assets/video_lines.gif" width="260" alt="The montage redrawn by ln as thin black lines on white"><br><b>Drawn by ln, lines only</b><br><sub>the default</sub></td>
   </tr>
 </table>
 
@@ -120,7 +121,7 @@ go run ./examples/video/art -in clip.mp4 -out out/art.mp4 -gocode out/art.go # a
 go run ./examples/video/art -in clip.mp4 -out out/art.mp4 -check             # measure flicker and lost detail per frame
 ```
 
-It needs Python with `pip install opencv-python numpy scikit-image`, and ffmpeg. The original footage is not included here, because it is not ours to publish; use your own clip.
+It needs Python with `pip install opencv-python numpy scikit-image`, and ffmpeg. The left clip is third-party footage, shown only so you can compare it with what ln drew; it belongs to its creators. Use your own clip for your own work.
 
 ## How it works
 

@@ -132,8 +132,12 @@ type wireFrame struct {
 	Lines   []wireLine   `json:"lines"`
 }
 
-// Python finds a python interpreter on PATH.
+// Python finds a python interpreter: the one named in LN_PYTHON if set, else the first of python, python3 and py
+// on PATH.
 func Python() (string, error) {
+	if p := os.Getenv("LN_PYTHON"); p != "" {
+		return p, nil
+	}
 	for _, name := range []string{"python", "python3", "py"} {
 		if p, err := exec.LookPath(name); err == nil {
 			return p, nil

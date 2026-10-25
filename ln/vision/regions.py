@@ -43,9 +43,16 @@ CHROMA = 1.9  # colourfulness counts this much more than brightness when picking
 
 def read_frames(path, width, fps):
     """Frames at exact times 0, 1/fps, 2/fps ... whatever the file's own frame rate is."""
+    img = cv2.imread(path)
+    if img is not None:
+        h = int(round(img.shape[0] * width / img.shape[1]))
+        yield cv2.resize(img, (width, h), interpolation=cv2.INTER_AREA)
+        return
+
     cap = cv2.VideoCapture(path)
     if not cap.isOpened():
         sys.exit("cannot open " + path)
+
     src_fps = cap.get(cv2.CAP_PROP_FPS) or fps
     i, want = 0, 0.0
     while True:

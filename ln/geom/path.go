@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"image"
 	"io/ioutil"
+	"math"
 	"runtime"
 	"strings"
 	"sync"
@@ -233,3 +234,79 @@ func (p Paths) WriteToSVG(path string, width, height float64) error {
 func (p Paths) WriteToTXT(path string) error {
 	return ioutil.WriteFile(path, []byte(p.String()), 0644)
 }
+
+// CubicBezier generates points along a cubic Bezier curve from p0 to p3 with control points p1 and p2.
+func CubicBezier(p0, p1, p2, p3 Vector, steps int) Path {
+	if steps < 1 {
+		steps = 1
+	}
+	path := make(Path, steps+1)
+	for i := 0; i <= steps; i++ {
+		t := float64(i) / float64(steps)
+		u := 1 - t
+		tt, uu := t*t, u*u
+		x := uu*u*p0.X + 3*uu*t*p1.X + 3*u*tt*p2.X + tt*t*p3.X
+		y := uu*u*p0.Y + 3*uu*t*p1.Y + 3*u*tt*p2.Y + tt*t*p3.Y
+		z := uu*u*p0.Z + 3*uu*t*p1.Z + 3*u*tt*p2.Z + tt*t*p3.Z
+		path[i] = Vector{X: x, Y: y, Z: z}
+	}
+	return path
+}
+
+// Ellipse returns a closed 2D elliptical path in the XY plane with radii rx and ry around (cx, cy).
+func Ellipse(cx, cy, rx, ry float64, steps int) Path {
+	if steps < 3 {
+		steps = 32
+	}
+	p := make(Path, steps)
+	for i := 0; i < steps; i++ {
+		a := 2 * math.Pi * float64(i) / float64(steps)
+		p[i] = Vector{X: cx + rx*math.Cos(a), Y: cy + ry*math.Sin(a)}
+	}
+	return p
+}
+
+// Circle returns a closed 2D circular path in the XY plane of radius r around (cx, cy).
+func Circle(cx, cy, r float64, steps int) Path {
+	return Ellipse(cx, cy, r, r, steps)
+}
+
+// Translate returns a new Path with all points shifted by (dx, dy).
+func (p Path) Translate(dx, dy float64) Path {
+	out := make(Path, len(p))
+	for i, pt := range p {
+		out[i] = Vector{X: pt.X + dx, Y: pt.Y + dy, Z: pt.Z}
+	}
+	return out
+}
+
+// Scale returns a new Path with all points scaled around the origin by (sx, sy).
+func (p Path) Scale(sx, sy float64) Path {
+	out := make(Path, len(p))
+	for i, pt := range p {
+		out[i] = Vector{X: pt.X * sx, Y: pt.Y * sy, Z: pt.Z}
+	}
+	return out
+}
+
+// Rotate returns a new Path with all points rotated around the origin by rad radians.
+func (p Path) Rotate(rad float64) Path {
+	cos, sin := math.Cos(rad), math.Sin(rad)
+	out := make(Path, len(p))
+	for i, pt := range p {
+		out[i] = Vector{X: pt.X*cos - pt.Y*sin, Y: pt.X*sin + pt.Y*cos, Z: pt.Z}
+	}
+	return out
+}
+
+// Reverse returns a new Path with points in reverse order.
+func (p Path) Reverse() Path {
+	n := len(p)
+	out := make(Path, n)
+	for i, pt := range p {
+		out[n-1-i] = pt
+	}
+	return out
+}
+
+

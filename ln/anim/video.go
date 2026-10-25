@@ -29,9 +29,9 @@ func (a FrameAnimation) WriteVideo(path string, n int, fps, width, height float6
 }
 
 func writeVideo(path string, n int, fps, width, height float64, frame func(t float64) Frame) error {
-	bin, err := exec.LookPath("ffmpeg")
+	bin, err := FFmpeg()
 	if err != nil {
-		return fmt.Errorf("ffmpeg not found on PATH: %w", err)
+		return err
 	}
 	args := []string{"-y", "-loglevel", "error", "-f", "image2pipe", "-framerate", fmt.Sprint(fps), "-c:v", "png", "-i", "-"}
 	switch strings.ToLower(filepath.Ext(path)) {

@@ -13,9 +13,9 @@ import (
 // frame, in order, scaled to width x height at fps frames per second. A height of 0
 // keeps the aspect ratio. Return an error from each to stop early. Needs ffmpeg on PATH.
 func ReadVideo(path string, width, height int, fps float64, each func(i int, frame image.Image) error) error {
-	bin, err := exec.LookPath("ffmpeg")
+	bin, err := FFmpeg()
 	if err != nil {
-		return fmt.Errorf("ffmpeg not found on PATH: %w", err)
+		return err
 	}
 	h := height
 	if h == 0 {

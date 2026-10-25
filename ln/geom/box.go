@@ -78,3 +78,53 @@ func (b *Box) Partition(axis Axis, point float64) (left, right bool) {
 	}
 	return
 }
+
+// Rect returns a closed 2D Path of the box in the XY plane.
+func (b Box) Rect() Path {
+	return Path{
+		{X: b.Min.X, Y: b.Min.Y},
+		{X: b.Max.X, Y: b.Min.Y},
+		{X: b.Max.X, Y: b.Max.Y},
+		{X: b.Min.X, Y: b.Max.Y},
+		{X: b.Min.X, Y: b.Min.Y},
+	}
+}
+
+// ClipSegment2D clips a line segment (p0 to p1) against the box in the XY plane
+// using the Liang-Barsky algorithm. It returns the clipped start and end points
+// and true if any part of the segment lies within the box.
+func (b Box) ClipSegment2D(p0, p1 Vector) (Vector, Vector, bool) {
+	t0, t1 := 0.0, 1.0
+	dx := p1.X - p0.X
+	dy := p1.Y - p0.Y
+
+	p := [4]float64{-dx, dx, -dy, dy}
+	q := [4]float64{p0.X - b.Min.X, b.Max.X - p0.X, p0.Y - b.Min.Y, b.Max.Y - p0.Y}
+
+	for i := 0; i < 4; i++ {
+		if p[i] == 0 {
+			if q[i] < 0 {
+				return Vector{}, Vector{}, false
+			}
+		} else {
+			t := q[i] / p[i]
+			if p[i] < 0 {
+				if t > t1 {
+					return Vector{}, Vector{}, false
+				}
+				if t > t0 {
+					t0 = t
+				}
+			} else {
+				if t < t0 {
+					return Vector{}, Vector{}, false
+				}
+				if t < t1 {
+					t1 = t
+				}
+			}
+		}
+	}
+	return Vector{X: p0.X + t0*dx, Y: p0.Y + t0*dy}, Vector{X: p0.X + t1*dx, Y: p0.Y + t1*dy}, true
+}
+

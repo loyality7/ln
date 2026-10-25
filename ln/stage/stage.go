@@ -12,6 +12,7 @@ import (
 	"github.com/loyality7/ln/ln/ink"
 	"github.com/loyality7/ln/ln/light"
 	"github.com/loyality7/ln/ln/model"
+	"github.com/loyality7/ln/ln/physics"
 	"github.com/loyality7/ln/ln/scene"
 	"github.com/loyality7/ln/ln/shapes"
 )
@@ -70,8 +71,11 @@ type Stage struct {
 	Cam        *Camera
 	Atmosphere Atmosphere // lights and sky; swap it for a time-of-day model
 	Look       Look
-	Overlays   []ink.Overlay // vector art tied to the 3D scene (faces, highlights)
-	TL         *Timeline
+	// Bend, if set, curves every camera ray around a mass, so the whole scene is seen through gravitational lensing
+	// (see ln/physics). Looks that read the picture per pixel show it; lines drawn straight from shapes do not bend.
+	Bend     *physics.Field
+	Overlays []ink.Overlay // vector art tied to the 3D scene (faces, highlights)
+	TL       *Timeline
 }
 
 func New(w, h, fps float64) *Stage {
@@ -119,7 +123,7 @@ func bake(m *model.Mesh, w geom.Matrix, id int) *model.Mesh {
 // Shot evaluates the timeline at sec and assembles everything for that moment.
 func (s *Stage) Shot(sec float64) Shot {
 	s.TL.apply(sec)
-	sc := &scene.Scene{}
+	sc := &scene.Scene{Bend: s.Bend}
 	eye := s.Cam.Eye.WorldPos()
 	silhouettes := false
 	if u, ok := s.Look.(silhouetteUser); ok {

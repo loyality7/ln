@@ -61,6 +61,22 @@ func (l *ColourLook) Render(sh Shot) anim.Frame {
 	return ink.RenderColour(sh.Scene, sh.Cam.Eye, sh.Cam.Center, sh.Cam.Up, sh.W, sh.H, sh.Cam.Fovy, st, sh.Mats, sh.Overlays)
 }
 
+// PlotterLook draws the scene the way a pen plotter would: only the lines of the shapes themselves (outlines, creases,
+// silhouettes), with every line hidden behind something removed. The result is vector paths, so it can be saved as SVG.
+type PlotterLook struct {
+	Step float64 // how finely each line is tested for being hidden, in world units (0 = the eye distance / 300)
+}
+
+func (l *PlotterLook) UsesSilhouettes() bool { return true }
+
+func (l *PlotterLook) Render(sh Shot) anim.Frame {
+	step := l.Step
+	if step == 0 {
+		step = sh.Cam.Eye.Distance(sh.Cam.Center) / 300
+	}
+	return sh.Scene.Render(sh.Cam.Eye, sh.Cam.Center, sh.Cam.Up, sh.W, sh.H, sh.Cam.Fovy, 0.1, 1000, step)
+}
+
 // ASCIILook draws the scene as text characters.
 type ASCIILook struct{ Options ascii.Options }
 

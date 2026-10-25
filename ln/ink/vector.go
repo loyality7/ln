@@ -276,3 +276,34 @@ func IsoLines(f []float64, valid []bool, w, h int, levels []float64, sx, sy floa
 	}
 	return out
 }
+
+// HatchBox generates 2D parallel hatching lines across a bounding box at the given
+// angle in degrees (0 is horizontal, 45 is diagonal), spaced by spacing pixels, with stroke width weight.
+func HatchBox(box geom.Box, spacing, angleDeg, weight float64) []Line {
+	if spacing <= 0 {
+		return nil
+	}
+	var lines []Line
+	rad := angleDeg * math.Pi / 180
+	dx, dy := math.Cos(rad), math.Sin(rad)
+	diag := math.Hypot(box.Max.X-box.Min.X, box.Max.Y-box.Min.Y)
+	center := box.Center()
+
+	nx, ny := -dy, dx
+	steps := int(math.Ceil(diag / spacing))
+	for i := -steps; i <= steps; i++ {
+		ox := center.X + float64(i)*spacing*nx
+		oy := center.Y + float64(i)*spacing*ny
+		p0 := geom.Vector{X: ox - dx*diag, Y: oy - dy*diag}
+		p1 := geom.Vector{X: ox + dx*diag, Y: oy + dy*diag}
+
+		if c0, c1, ok := box.ClipSegment2D(p0, p1); ok {
+			lines = append(lines, Line{
+				Pts:   geom.Path{c0, c1},
+				Width: weight,
+			})
+		}
+	}
+	return lines
+}
+

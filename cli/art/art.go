@@ -30,7 +30,7 @@ func Run(args []string) int {
 	pop := fs.Float64("pop", 0, "boost the colour patches' saturation, 1 = as filmed")
 	style := fs.String("style", "", "contour | pencil: one line per border between colour patches")
 	silent := fs.Bool("nosound", false, "do not put the original sound back")
-	code := fs.String("code", "", "also write the animation as readable Go code to this file (lines, colour and glow-colour looks)")
+	code := fs.String("code", "", "also save the animation: a .json frames file (play it with `ln play`), or any other name for Go code (lines, colour and glow-colour looks)")
 	check := fs.Bool("check", false, "measure the result against the footage when done")
 	colours := fs.Int("colours", 0, "size of the colour palette: more keeps small colour differences")
 	merge := fs.Float64("merge", 0, "fold palette colours closer than this together: lower keeps more tones")

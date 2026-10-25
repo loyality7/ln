@@ -10,6 +10,7 @@ import (
 	"github.com/loyality7/ln/cli/check"
 	"github.com/loyality7/ln/cli/draw"
 	"github.com/loyality7/ln/cli/mesh"
+	"github.com/loyality7/ln/cli/play"
 	"github.com/loyality7/ln/cli/render"
 	"github.com/loyality7/ln/cli/setup"
 	"github.com/loyality7/ln/cli/ui"
@@ -33,6 +34,7 @@ func init() {
 		{"render", "Draw", "draw a 3D scene file as a video or a picture", render.Run},
 		{"draw", "Draw", "draw a 2D drawing file: brush strokes, hatching, glowing light", draw.Run},
 		{"art", "Draw", "redraw any video as line art", art.Run},
+		{"play", "Draw", "turn a frames file into a video (no video or Python needed)", play.Run},
 		{"mesh", "Draw", "convert, slice and voxelize 3D models", mesh.Run},
 		{"check", "Draw", "measure a drawing against the video it came from", check.Run},
 		{"new", "Learn", "write a starter file to edit (a scene or a drawing)", newCmd},

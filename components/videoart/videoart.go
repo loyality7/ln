@@ -18,6 +18,7 @@ import (
 
 	"github.com/fogleman/gg"
 	"github.com/loyality7/ln/ln/anim"
+	"github.com/loyality7/ln/ln/film"
 	"github.com/loyality7/ln/ln/glow"
 	"github.com/loyality7/ln/ln/ink"
 	"github.com/loyality7/ln/ln/vision"
@@ -126,29 +127,18 @@ func Run(in, out string, o Options) error {
 		os.MkdirAll(dir, 0o755)
 	}
 	if o.GoCode != "" {
-		title := "Drawn by ln from " + filepath.Base(in)
-		var src string
-		switch {
-		case len(inks) == len(frames):
-			src = ink.GoSource(inks, o.Vision.FPS, title, o.CodeEps)
-		case len(bases) == len(frames):
-			src = ink.GoSourceGlow(bases, lines, o.Weight, o.Vision.FPS, title, o.CodeEps)
-		default:
-			return fmt.Errorf("the Go-code export needs the lines, colour or glow-colour look, not %s", o.Look)
-		}
-		if err := os.WriteFile(o.GoCode, []byte(src), 0o644); err != nil {
+		if err := writeCode(in, o, inks, bases, lines); err != nil {
 			return err
 		}
-		fmt.Printf("wrote %s (%d KB of Go)\n", o.GoCode, len(src)/1024)
 	}
 	if o.Frame >= 0 || strings.EqualFold(filepath.Ext(out), ".png") {
 		return gg.SavePNG(out, frames[0].Image(0, 0))
 	}
 	say("encoding the video")
-	film := anim.FrameAnimation(func(t float64) anim.Frame {
+	movie := anim.FrameAnimation(func(t float64) anim.Frame {
 		return frames[min(len(frames)-1, int(math.Floor(t*float64(len(frames)))))]
 	})
-	if err := film.WriteVideo(out, len(frames), o.Vision.FPS, fw, fh); err != nil {
+	if err := movie.WriteVideo(out, len(frames), o.Vision.FPS, fw, fh); err != nil {
 		return err
 	}
 	if o.Sound {
@@ -214,4 +204,33 @@ func boost(c ink.Color, k float64) ink.Color {
 	grey := luma(c)
 	cl := func(v float64) float64 { return math.Max(0, math.Min(1, v)) }
 	return ink.RGB(cl(grey+(c.R-grey)*k), cl(grey+(c.G-grey)*k), cl(grey+(c.B-grey)*k))
+}
+
+// writeCode saves the animation as a frames file (.json, played by `ln play`) or as Go code (anything else).
+func writeCode(in string, o Options, inks, bases, lines []*ink.Drawing) error {
+	title := "Drawn by ln from " + filepath.Base(in)
+	drawn, light, weight := inks, []*ink.Drawing(nil), 0.0
+	if len(drawn) == 0 {
+		drawn, light, weight = bases, lines, o.Weight
+	}
+	if len(drawn) == 0 {
+		return fmt.Errorf("the code export needs the lines, colour or glow-colour look, not %s", o.Look)
+	}
+	if strings.EqualFold(filepath.Ext(o.GoCode), ".json") {
+		f := film.New(drawn, light, weight, o.Vision.FPS, o.CodeEps)
+		if err := f.Save(o.GoCode); err != nil {
+			return err
+		}
+		fmt.Printf("wrote %s (%d frames)\n", o.GoCode, len(f.Frames))
+		return nil
+	}
+	src := ink.GoSource(drawn, o.Vision.FPS, title, o.CodeEps)
+	if light != nil {
+		src = ink.GoSourceGlow(drawn, light, weight, o.Vision.FPS, title, o.CodeEps)
+	}
+	if err := os.WriteFile(o.GoCode, []byte(src), 0o644); err != nil {
+		return err
+	}
+	fmt.Printf("wrote %s (%d KB of Go)\n", o.GoCode, len(src)/1024)
+	return nil
 }

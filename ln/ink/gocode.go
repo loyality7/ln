@@ -282,3 +282,7 @@ const width, height = %s, %s
 
 var frames = []func() *ink.Drawing{
 `
+
+// SimplifyIndex returns the indices of the points that keep p within eps pixels of itself, always including
+// both ends. eps <= 0 keeps every point.
+func SimplifyIndex(p geom.Path, eps float64) []int { return simplifyIndex(p, eps) }

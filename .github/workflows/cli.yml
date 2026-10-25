@@ -1,0 +1,49 @@
+name: cli
+
+on:
+  push:
+    branches: [master]
+    tags: ["v*"]
+  pull_request:
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go build ./cli/... ./cmd/...
+      - run: go test ./cli/... ./ln/...
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Build every platform
+        run: |
+          V="${GITHUB_REF_NAME}"
+          F="-s -w -X github.com/loyality7/ln/cli.Version=${V}"
+          mkdir -p dist
+          GOOS=windows GOARCH=amd64 go build -ldflags "$F" -o dist/ln-windows.exe ./cmd/ln
+          GOOS=darwin GOARCH=arm64 go build -ldflags "$F" -o dist/ln-mac-apple-silicon ./cmd/ln
+          GOOS=darwin GOARCH=amd64 go build -ldflags "$F" -o dist/ln-mac-intel ./cmd/ln
+          GOOS=linux GOARCH=amd64 go build -ldflags "$F" -o dist/ln-linux ./cmd/ln
+          chmod +x dist/ln-mac-* dist/ln-linux
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ln
+          path: dist/*
+      - name: Attach to the release (tags only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*

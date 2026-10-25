@@ -17,6 +17,16 @@ import (
 // rounded off with ink.Curve when drawn, which keeps the file small and the shapes smooth.
 // Positions are kept to a tenth of a pixel. fps is the speed the film plays at.
 func GoSource(drawings []*Drawing, fps float64, title string, eps float64) string {
+	return goSource(drawings, nil, 0, fps, title, eps)
+}
+
+// GoSourceGlow is GoSource for the glow-colour look: each frame is a drawing of colour patches (bases)
+// with white glowing lines (lines, one drawing of lines per frame) added on top as light of the given weight.
+func GoSourceGlow(bases, lines []*Drawing, weight, fps float64, title string, eps float64) string {
+	return goSource(bases, lines, weight, fps, title, eps)
+}
+
+func goSource(drawings, lights []*Drawing, weight, fps float64, title string, eps float64) string {
 	var b strings.Builder
 	num := func(v float64) string {
 		s := strconv.FormatFloat(math.Round(v*10)/10, 'f', 1, 64)
@@ -48,14 +58,19 @@ func GoSource(drawings []*Drawing, fps float64, title string, eps float64) strin
 	if len(drawings) > 0 {
 		w, h = drawings[0].W, drawings[0].H
 	}
-	fmt.Fprintf(&b, goHeader, title, len(drawings), fps, num(w), num(h))
+	header := goHeader
+	if lights != nil {
+		header = strings.NewReplacer("func() *ink.Drawing", "func() anim.Frame",
+			"\t\"github.com/loyality7/ln/ln/geom\"\n", "\t\"github.com/loyality7/ln/ln/geom\"\n\t\"github.com/loyality7/ln/ln/glow\"\n").Replace(header)
+	}
+	fmt.Fprintf(&b, header, title, len(drawings), fps, num(w), num(h))
 	for i := range drawings {
 		fmt.Fprintf(&b, "\tframe%d,\n", i)
 	}
 	b.WriteString("}\n")
 
-	for i, d := range drawings {
-		fmt.Fprintf(&b, "\nfunc frame%d() *ink.Drawing {\n\td := ink.NewDrawing(width, height)\n", i)
+	// emit writes a drawing's paper, colour patches and lines, then the return.
+	emit := func(d *Drawing) {
 		if d.Paper.A > 0 {
 			fmt.Fprintf(&b, "\td.Paper = %s\n", col(d.Paper))
 		}
@@ -116,6 +131,19 @@ func GoSource(drawings []*Drawing, fps float64, title string, eps float64) strin
 			b.WriteString("\t})\n")
 		}
 		b.WriteString("\treturn d\n}\n")
+	}
+
+	for i, d := range drawings {
+		if lights == nil {
+			fmt.Fprintf(&b, "\nfunc frame%d() *ink.Drawing {\n\td := ink.NewDrawing(width, height)\n", i)
+			emit(d)
+			continue
+		}
+		fmt.Fprintf(&b, "\nfunc frame%d() anim.Frame {\n\treturn glow.Over{Base: colour%d(), Light: glow.InkLines(lines%d().Layers[0].Lines, width, height, %s)}\n}\n", i, i, i, short(weight))
+		fmt.Fprintf(&b, "\nfunc colour%d() *ink.Drawing {\n\td := ink.NewDrawing(width, height)\n", i)
+		emit(d)
+		fmt.Fprintf(&b, "\nfunc lines%d() *ink.Drawing {\n\td := ink.NewDrawing(width, height)\n", i)
+		emit(lights[i])
 	}
 	return b.String()
 }

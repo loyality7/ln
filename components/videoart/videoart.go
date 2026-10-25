@@ -10,8 +10,6 @@ package videoart
 
 import (
 	"fmt"
-	"image"
-	"image/color"
 	"math"
 	"os"
 	"os/exec"
@@ -20,7 +18,6 @@ import (
 
 	"github.com/fogleman/gg"
 	"github.com/loyality7/ln/ln/anim"
-	"github.com/loyality7/ln/ln/geom"
 	"github.com/loyality7/ln/ln/glow"
 	"github.com/loyality7/ln/ln/ink"
 	"github.com/loyality7/ln/ln/vision"
@@ -46,7 +43,7 @@ type Options struct {
 	Pop     float64 // saturation boost for the colour patches, 1 = exactly as filmed
 	Frame   int     // a number 0 or more: draw only that frame, as a picture. Negative: the whole video
 	Sound   bool    // put the original sound back into the finished video
-	GoCode  string  // also write the animation as plain readable Go code to this path (lines and colour looks)
+	GoCode  string  // also write the animation as plain readable Go code to this path (lines, colour and glow-colour looks)
 	CodeEps float64 // with GoCode: keep each shape's points within this many pixels (higher: shorter file)
 	Check   bool    // after writing, measure the video against the footage frame by frame
 	Vision  vision.Options
@@ -80,6 +77,7 @@ func Run(in, out string, o Options) error {
 	say("analysing the video")
 	var frames []anim.Frame
 	var inks []*ink.Drawing // the same frames, when they are ink, for the Go-code export
+	var bases, lines []*ink.Drawing // glow-colour: the colour patches and the lines of light, for the Go-code export
 	var fw, fh float64
 	err := vision.Read(in, o.Vision, func(f vision.Frame) error {
 		if o.Frame >= 0 && f.Index < o.Frame {
@@ -95,7 +93,10 @@ func Run(in, out string, o Options) error {
 				fills[k].Color = boost(fills[k].Color, o.Pop)
 			}
 			blackenDark(fills)
-			frames = append(frames, lit{ink.NewDrawing(f.W, f.H, ink.Layer{Fills: fills}), glowLines(f, o.Weight)})
+			base := ink.NewDrawing(f.W, f.H, ink.Layer{Fills: fills})
+			bases = append(bases, base)
+			lines = append(lines, ink.NewDrawing(f.W, f.H, ink.Layer{Lines: f.Strokes(1, 4, ink.Color{})}))
+			frames = append(frames, glow.Over{Base: base, Light: glowLines(f, o.Weight)})
 		default:
 			var layers []ink.Layer
 			if o.Look == Colour {
@@ -125,10 +126,16 @@ func Run(in, out string, o Options) error {
 		os.MkdirAll(dir, 0o755)
 	}
 	if o.GoCode != "" {
-		if len(inks) != len(frames) {
-			return fmt.Errorf("the Go-code export needs the lines or colour look, not %s", o.Look)
+		title := "Drawn by ln from " + filepath.Base(in)
+		var src string
+		switch {
+		case len(inks) == len(frames):
+			src = ink.GoSource(inks, o.Vision.FPS, title, o.CodeEps)
+		case len(bases) == len(frames):
+			src = ink.GoSourceGlow(bases, lines, o.Weight, o.Vision.FPS, title, o.CodeEps)
+		default:
+			return fmt.Errorf("the Go-code export needs the lines, colour or glow-colour look, not %s", o.Look)
 		}
-		src := ink.GoSource(inks, o.Vision.FPS, "Drawn by ln from "+filepath.Base(in), o.CodeEps)
 		if err := os.WriteFile(o.GoCode, []byte(src), 0o644); err != nil {
 			return err
 		}
@@ -184,39 +191,7 @@ func addSound(src, video string) error {
 
 // glowLines draws the frame's lines as white light with a soft bloom, on black.
 func glowLines(f vision.Frame, weight float64) glow.Frame {
-	cv := glow.New(int(f.W), int(f.H))
-	for _, l := range f.Strokes(1, 4, ink.Color{}) {
-		var p geom.Path
-		for _, q := range l.Pts {
-			p = append(p, geom.Vector{X: q.X, Y: f.H - q.Y})
-		}
-		cv.Path(p, 0.35+0.45*weight, 1, 0.97, 0.94)
-	}
-	return glow.Frame{Canvas: cv, Look: glow.Look{Exposure: 1.15, Bloom: []float64{0.004, 0.014, 0.045}, Strength: 0.8}}
-}
-
-// lit is a picture with glowing lines over it: the lines are light, so they add to what is underneath
-// (screen blend) instead of covering it.
-type lit struct {
-	base  *ink.Drawing
-	lines glow.Frame
-}
-
-func (l lit) Image(w, h float64) image.Image {
-	a, b := l.base.Image(w, h), l.lines.Image(w, h)
-	out := image.NewRGBA(a.Bounds())
-	scr := func(p, q uint32) uint8 {
-		pf, qf := float64(p)/65535, float64(q)/65535
-		return uint8(255*(1-(1-pf)*(1-qf)) + 0.5)
-	}
-	for y := a.Bounds().Min.Y; y < a.Bounds().Max.Y; y++ {
-		for x := a.Bounds().Min.X; x < a.Bounds().Max.X; x++ {
-			ar, ag, ab, _ := a.At(x, y).RGBA()
-			br, bg, bb, _ := b.At(x, y).RGBA()
-			out.SetRGBA(x, y, color.RGBA{scr(ar, br), scr(ag, bg), scr(ab, bb), 255})
-		}
-	}
-	return out
+	return glow.InkLines(f.Strokes(1, 4, ink.Color{}), f.W, f.H, weight)
 }
 
 func luma(c ink.Color) float64 { return 0.2126*c.R + 0.7152*c.G + 0.0722*c.B }

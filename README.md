@@ -122,6 +122,32 @@ go run ./examples/video/art -in clip.mp4 -out out/art.mp4 -gocode out/art.go # a
 go run ./examples/video/art -in clip.mp4 -out out/art.mp4 -check             # measure flicker and lost detail per frame
 ```
 
+### The `ln` command
+
+Everything above also runs as one program, `ln`, with no Go needed. Download the file for your system from the [Releases](../../releases) page (or the latest build under Actions), then:
+
+```
+ln install                                  # once: puts ln on your PATH, installs ffmpeg (Windows) and the Python packages
+ln art clip.mp4                             # glowing lines over the footage's colours -> clip_glow-colour.mp4
+ln art clip.mp4 -look lines                 # lines | colour | glow | glow-colour
+ln art clip.mp4 -w 540 -code clip.go        # also write the animation as Go code
+ln render scene.json                        # a 3D scene file to video (ln new writes a sample)
+ln draw drawing.json                        # a 2D drawing, as ink or glow
+ln help                                     # every command; ln help art for its options
+```
+
+### Make the art as code, and run just the code
+
+`-code` writes the whole animation as plain Go shapes (lines, colour patches, glow), so the video and Python are no longer needed:
+
+```
+ln art clip.mp4 -look glow-colour -w 540 -code clip.go
+go run clip.go -out out/clip.mp4        # redraws the whole video from the code (needs ffmpeg)
+go run clip.go -frame 40 -out f.png     # or one frame
+```
+
+Run `clip.go` from inside a Go module that requires `github.com/loyality7/ln` (for example this repo). It works for the lines, colour and glow-colour looks.
+
 It needs Python with `pip install opencv-python numpy scikit-image`, and ffmpeg. The left clip is third-party footage, shown only so you can compare it with what ln drew; it belongs to its creators. Use your own clip for your own work.
 
 ## How it works
